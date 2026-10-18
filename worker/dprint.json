@@ -1,7 +1,0 @@
-{
-  "lineWidth": 110,
-  "indentWidth": 2,
-  "plugins": ["https://plugins.dprint.dev/typescript-0.96.1.wasm"],
-  "includes": ["src/**/*.ts", "test/**/*.ts"],
-  "excludes": ["node_modules", ".dry-run", ".wrangler"]
-}

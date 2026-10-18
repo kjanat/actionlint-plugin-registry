@@ -1,0 +1,17 @@
+[tools]
+"github:oven-sh/bun"                      = { prefix = "1.4", version_prefix = "bun-v" }
+"github:kjanat/dprint"                    = "latest"
+"github:kjanat/runner"                    = "latest"
+"github:kjanat/shellcheck-rs"             = { version = "latest", rename_exe = "shellcheck" }
+"go:actionlint.kjanat.dev/cmd/actionlint" = { version = "fuck-it", auto_update = true, depends = ["go", "github:kjanat/shellcheck-rs"] }
+
+[wrappers]
+[wrappers.wrangler]
+command = "run"
+args    = ["wrangler"]
+env     = { RUNNER_DIR = "worker" }
+
+[wrappers.biome]
+command = "run"
+args    = ["biome"]
+env     = { RUNNER_DIR = "worker" }

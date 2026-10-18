@@ -1,4 +1,4 @@
-// Package registry admits authenticated, digest-pinned plugin releases after host validation.
+// Package registry accepts authenticated plugin releases after verifying their checksums and host compatibility.
 package registry
 
 import (
@@ -102,8 +102,8 @@ var (
 	numericIDPattern        = regexp.MustCompile(`^[1-9][0-9]*$`)
 )
 
-// Receipt is accepted only from the authenticated Worker-to-workflow handoff.
-// Parsing this envelope does not verify OIDC: callers must authenticate its source.
+// Receipt records a submission claimed by an authenticated registry workflow.
+// Parsing it does not verify OIDC. Callers must obtain it from the authenticated Worker response.
 type Receipt struct {
 	SchemaVersion int               `json:"schema_version"`
 	ID            string            `json:"id"`

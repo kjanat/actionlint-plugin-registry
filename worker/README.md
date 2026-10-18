@@ -1,42 +1,54 @@
 # Publication inbox
 
-Public Worker source. No publisher token, GitHub App key or Cloudflare credential
-belongs in this repository. `wrangler.jsonc` contains public deployment identifiers.
+This directory contains the public source code for the publication Worker.
+Do not commit publisher tokens, GitHub App keys, or Cloudflare credentials.
+The deployment identifiers in `wrangler.jsonc` are public configuration values.
 
-The Worker authorizes a publication **attempt**. It does not execute WASM, download
-publisher artifacts, or declare a plugin safe. The registry validator independently
-resolves the release, binds its repository ID and commit to the receipt, downloads
-the digest-pinned artifact, and validates the plugin before publishing static data.
+The Worker authenticates publishers and queues their submissions for validation.
+It does not download or execute plugins. The registry validator resolves the
+release and checks its repository ID and commit against the authenticated receipt.
+It then downloads the artifact, verifies its checksum, and validates the plugin
+before publishing a registry record.
+
+After accepting a submission, the Worker uses the registry's GitHub App to start
+the validation workflow. The workflow still authenticates with OIDC and claims
+the stored request. Starting a workflow does not authorize a new submission.
+The [GitHub App setup guide](../docs/github-app.md) describes the required installation
+and credentials.
 
 ## Authentication
 
-- Publisher audience: `https://plugins.actionlint.kjanat.dev`.
-- Validator audience: `https://plugins.actionlint.kjanat.dev/validator`.
+- Publisher tokens must use the audience `https://plugins.actionlint.kjanat.dev`.
+- Validator tokens must use the audience `https://plugins.actionlint.kjanat.dev/validator`.
 - Only GitHub Actions and GitLab.com issuers are configured. JWKS endpoints are
-  fixed in source; JWT headers never select a URL. `jose` verifies RS256 signatures,
-  exact audience, issuer, required timestamps and a maximum token age of ten minutes
-  with five seconds of clock tolerance. Its JWKS fetch rejects redirects.
-- GitHub publishers require a public repository, their own tag and workflow, and
-  `push`, `release` or `workflow_dispatch`. Pull-request contexts are rejected.
-- GitLab publishers require public tag pipelines from `push` or `web`;
-  `job_project_id`/`job_project_path` must match the pipeline project and submission.
-  CI configuration must come from that same tag and commit. Merge requests and
-  external CI configurations are rejected.
-- Subjects are retained as bounded identity evidence, not parsed into repository
-  identity. Both providers support customized subjects. Stable provider IDs and
-  explicit signed project/ref claims establish ownership.
-- Consumers require the configured registry repository ID, exact admission workflow
-  on `master`, and `schedule` or `workflow_dispatch`. Publisher tokens cannot claim
-  work. Fresh consumer tokens across jobs in the same run/attempt retain lease ownership.
+  fixed in the source code, so JWT headers cannot redirect key retrieval to another
+  URL. The `jose` library verifies the RS256 signature, exact audience, issuer, and
+  required timestamps. Tokens must have been issued within the last ten minutes,
+  allowing five seconds for clock differences. Requests for signing keys reject redirects.
+- GitHub publishers must run a workflow from a tag in their own public repository.
+  The event must be `push`, `release`, or `workflow_dispatch`. Tokens from
+  pull-request workflows are rejected.
+- GitLab publishers must use tag pipelines in public projects, triggered by `push`
+  or `web`. The `job_project_id` and `job_project_path` claims must match both the
+  pipeline project and the submission. The CI configuration must come from the
+  same tag and commit. Merge requests and external CI configurations are rejected.
+- The Worker retains the token's subject as identity evidence, with a length limit.
+  It uses the signed project ID and reference claims to identify the repository,
+  because both providers allow customized subjects.
+- The registry workflow must match the configured repository ID and workflow path
+  on `master`, and its event must be `schedule` or `workflow_dispatch`. Publisher
+  tokens cannot claim queued work. Different jobs in the same workflow run and
+  attempt can use fresh tokens to act on the same claim.
 
-OIDC establishes authorization by the repository's CI identity. It does **not**
-prove that the submitted bytes were built by that workflow. Build provenance and
-host-enforced release immutability are separate evidence.
+OIDC identifies the CI job that authorized a submission. It does not prove that
+the job built the submitted file. Build attestations and the hosting provider's
+release immutability guarantees provide separate evidence.
 
 ## HTTP contract
 
-All JSON bodies are bounded to 16 KiB; only listed submission fields are accepted.
-POST requests use `Authorization: Bearer <OIDC token>`. Tokens are never persisted.
+JSON request bodies must not exceed 16 KiB, and submissions can contain only the
+documented fields. POST requests must include `Authorization: Bearer <OIDC token>`.
+The Worker does not store tokens.
 
 `POST /v1/submissions` accepts:
 
@@ -52,47 +64,68 @@ POST requests use `Authorization: Bearer <OIDC token>`. Tokens are never persist
 }
 ```
 
-Provider is `github` or `gitlab`; GitLab nested groups are supported. Kind is `core`
-or `component`; `.wasm.gz` assets are also supported. Success is HTTP 202
-`{"id":"UUID","status":"pending"}` (retries return the current status).
+Set `provider` to `github` or `gitlab` and `kind` to `core` or `component`.
+GitLab repository paths can include nested groups. Assets can use either the
+`.wasm` or `.wasm.gz` extension. A new submission returns HTTP 202 with
+`{"id":"UUID","status":"pending"}`. Repeating the same submission returns its
+current status.
 
 `POST /v1/claims` uses the validator audience and returns
 `{"claim":null}` or `{"claim":{"receipt":{...},"lease_id":"UUID"}}`.
-The receipt contains `schema_version`, `id`, `submission`, `authorized_at` and
-`identity`: `issuer`, `subject`, `repository_id`, `owner_id`, `repository`, `ref`,
-`commit`, `workflow`, `run_id`. IDs are strings. GitHub run identity is
-`run_id:run_attempt`; GitLab uses `pipeline_id:job_id`.
+The receipt contains `schema_version`, `id`, `submission`, `authorized_at`, and
+an `identity` object. That object contains `issuer`, `subject`, `repository_id`,
+`owner_id`, `repository`, `ref`, `commit`, `workflow`, and `run_id`. IDs are stored
+as strings. GitHub run identifiers use `run_id:run_attempt`; GitLab identifiers
+use `pipeline_id:job_id`.
 
-`POST /v1/claims/<id>/complete` accepts
-`{"lease_id":"UUID","status":"published"}` or `rejected`, with an optional
-bounded `detail`. Return value is `{"id":"UUID","status":"published"}`.
-Completion requires the current lease and original consumer identity. Identical
-completion retries are idempotent. Detail remains private.
+To complete a claim, send `POST /v1/claims/<id>/complete` with
+`{"lease_id":"UUID","status":"published"}`. The `status` field can also be
+`rejected`, and an optional `detail` field can contain up to 1,024 characters.
+The response contains the submission ID and its resulting status, for example
+`{"id":"UUID","status":"published"}`. The request must use the current lease
+and the identity that claimed it. Repeating the same completion request has no
+additional effect. The public status endpoint does not expose `detail`.
 
-`GET /v1/submissions/<id>` returns only `{id,status}`. Public states are `pending`,
-`validating`, `published`, `rejected`, `failed`. `GET /health` returns `{status:"ok"}`.
-Responses disable caching. No browser CORS publication interface is enabled.
+The public endpoint `GET /v1/submissions/<id>` returns only `id` and `status`.
+The possible statuses are `pending`, `validating`, `published`, `rejected`, and
+`failed`. The health endpoint `GET /health` returns `{"status":"ok"}`. Responses
+disable caching. The API does not enable CORS for browser-based publication clients.
 
 ## Persistence and retry rules
 
-One SQLite Durable Object serializes the prototype inbox. Transactions atomically
-bind `(issuer, jti)` to canonical submission bytes and
-`(issuer, repository ID, tag, asset)` to those same bytes. A new token, different
-plugin kind or changed digest cannot replace an existing version. Retries of the
-same normalized submission return the original receipt.
+The prototype stores its queue in one SQLite Durable Object. Each transaction
+associates both the token's `(issuer, jti)` and the version's
+`(issuer, repository ID, tag, asset)` with the normalized submission. Neither
+identity can later be used to submit different data. A new token or a change to
+the plugin kind or checksum cannot replace an existing version. Repeating the
+same normalized submission returns the original receipt.
 
-Each publisher has at most ten pending/validating records and thirty fresh-token
-admissions per UTC hour. The global pending limit is 1,000. Replay records expire;
-rate buckets older than 48 hours are removed. Immutable version bindings remain.
+Each publisher can have at most ten requests that are pending or being validated.
+It can make at most thirty submission attempts with fresh tokens per UTC hour.
+Across all publishers, at most 1,000 requests can be pending or being validated.
+Token replay records expire, and hourly rate-limit records are removed after
+48 hours. The associations between versions and submissions remain stored.
 
-Leases last sixty minutes. Expired work is retried up to three claims; a subsequent
-poll marks exhausted work `failed`. Infrastructure failures should leave the lease
-to expire, rather than incorrectly reject the plugin. Terminal records cannot be
-reopened through publication. Administrative recovery is not implemented yet;
-changing bytes requires a new tag. A scheduler outage delays both work and expiry
-processing. A queued validator can outlive a lease; later completion then fails and
-the next claim must reconcile any already-published immutable record idempotently.
-No claim means no publication, regardless of public inbox status.
+Each new submission also creates a dispatch notification in the same transaction.
+The Worker saves a Durable Object alarm before accepting the submission, then uses
+that alarm to notify GitHub. Failed notifications are retried at increasing intervals,
+up to five attempts or one hour. Repeating a submission does not create another
+notification or reset its retry schedule. Claiming a request removes its pending
+notification. Scheduled workflow runs remain available if dispatch fails.
+
+When the registry workflow claims a request, it receives a lease lasting sixty
+minutes. If the lease expires before completion, a later poll can claim the request
+again. After three expired attempts, the next poll marks the request `failed`.
+The current workflow lets failed jobs expire so that infrastructure failures can
+be retried. It does not yet report validation failures as `rejected`.
+
+Completed or failed requests cannot be reopened by submitting them again, and there
+is no administrative recovery command yet. Publishing different bytes requires a
+new tag. If scheduled workflows stop running, both validation and expiry processing
+are delayed. A delayed job may finish after its lease expires; its completion
+request then fails. The next attempt must handle any records already published
+without changing them. Only a workflow with an authenticated claim can publish a
+registry entry.
 
 ## Local checks and deployment
 
@@ -103,14 +136,16 @@ bun test
 bun run check:bundle
 ```
 
-Tests verify real JWT signatures and policy failures, and execute the same SQL
-against Bun SQLite for replay, immutable binding, quota and lease transitions.
-Dry-run bundles the Worker without starting a server or deploying. Tests do not
-substitute for a live provider-issued OIDC publication and validator round trip.
+The tests verify JWT signatures and authentication failures. They also run the
+queue's SQL against Bun SQLite to check replay protection, version immutability,
+quotas, and lease transitions. The `check:bundle` command builds the Worker without
+starting a server or deploying it. These checks do not replace an end-to-end test
+that submits and validates a plugin using tokens issued by a real CI provider.
 
-Deploy explicitly with `bunx wrangler deploy` after reviewing the account, domain,
-repository ID and workflow reference. The custom domain is
-`plugins.actionlint.kjanat.dev`; workers.dev and preview URLs are disabled.
+Before deploying, check the account, domain, repository ID, and workflow reference
+in `wrangler.jsonc`. Then run `bunx wrangler deploy` from this directory. The Worker
+uses `plugins.actionlint.kjanat.dev`. Access through workers.dev and preview URLs is
+disabled.
 
 References: [Cloudflare SQLite storage](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/),
 [GitHub OIDC](https://docs.github.com/en/actions/reference/security/oidc),

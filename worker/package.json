@@ -1,20 +1,30 @@
 {
-  "name": "@actionlint/plugin-publication-inbox",
+  "name": "@kjanat-actionlint/plugin-publication-inbox",
   "private": true,
   "type": "module",
   "imports": {
     "#*": "./src/*.ts"
   },
   "scripts": {
+    "lint": "biome lint src test --error-on-warnings",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
+    "prepare": "wrangler types",
     "check:bundle": "wrangler deploy --dry-run --outdir .dry-run"
   },
-  "dependencies": { "jose": "6.2.12" },
+  "dependencies": {
+    "jose": "6.2.12"
+  },
   "devDependencies": {
-    "@cloudflare/workers-types": "5.20261018.1",
+    "@biomejs/biome": "2.5.15",
     "@types/bun": "1.4.3",
     "typescript": "7.0.2",
     "wrangler": "4.151.1"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "bun",
+      "onFail": "error"
+    }
   }
 }

@@ -15,13 +15,13 @@ import (
 	"actionlint.kjanat.dev/rule"
 )
 
-// These identify the generated contract at HostCommit, not a second type graph.
-// The pinned host performs structural WIT validation before guest startup.
+// These constants identify the contract generated at HostCommit.
+// The selected host validates the component's WIT types before starting the guest.
 const componentInterface = "kjanat:actionlint/analyzer@0.1.0"
 const componentContractDigest = "a0096f562ab3da46b30d0f025ad1c6ed0d46e5b7ea1a53660b3214e3270fcbee"
 
-// componentDeclaration reuses the public host descriptor. Only its JSON naming
-// is adapted here; semantic rule fields are not independently re-declared.
+// componentDeclaration reuses the host's public descriptor and adapts its JSON field names.
+// The rule fields retain the types defined by the host.
 type componentDeclaration struct {
 	rule.Descriptor
 	Requires []analyzer.Fact `json:"requires"`

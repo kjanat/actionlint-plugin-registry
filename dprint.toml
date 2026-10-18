@@ -1,0 +1,59 @@
+#:schema https://dprint.kjanat.dev/schemas/v0.json
+
+useTabs     = true
+incremental = true
+plugins     = [
+  "https://plugins.dprint.dev/kjanat/json-schema-sort-0.1.2.wasm",
+  "https://plugins.dprint.dev/kjanat/shfmt-1.1.1.wasm",
+  "npm:@dprint/exec@0.7.3/plugin.json@704701df449dd7e942a71144773778ac529d68c2e4657bfc236d393b898b9a67",
+  "npm:@dprint/markdown@0.26.0",
+  "npm:@dprint/json@0.25.2",
+  "npm:dprint-plugin-yaml@0.6.0",
+  "npm:@dprint/typescript@0.96.1",
+  "npm:@dprint/ruff@0.11.1",
+]
+excludes    = []
+
+[typescript]
+quoteStyle                              = "preferSingle"
+"module.sortImportDeclarations"         = "maintain"
+"module.sortExportDeclarations"         = "maintain"
+"exportDeclaration.sortNamedExports"    = "maintain"
+"exportDeclaration.sortTypeOnlyExports" = "none"
+"importDeclaration.sortNamedImports"    = "maintain"
+"importDeclaration.sortTypeOnlyImports" = "none"
+
+[jsonSchemaSort]
+associations = ["**/schema.json", "**/*.schema.json"]
+
+[shfmt]
+useTabs          = true
+binaryNextLine   = true
+switchCaseIndent = true
+
+[markdown]
+textWrap                        = "maintain"
+emphasisKind                    = "asterisks"
+"codeBlock.useTabs"             = false
+"codeBlock.preserveIndentation" = true
+"html.useTabs"                  = false
+
+[yaml]
+printWidth = 160
+
+[json]
+jsonTrailingCommaFiles = ["**/.vscode/*.json", "**/.zed/{settings,tasks,debug}.json"]
+useTabs                = false
+
+[exec]
+cwd = "${configDir}"
+
+[[exec.commands]]
+# Use the repository's Go toolchain for Go 1.27 syntax.
+command = "gofmt -s"
+exts    = ["go"]
+
+[[exec.commands]]
+command       = "mise exec --no-deps --silent --quiet github:tombi-toml/tombi@latest -- tombi format - --stdin-filename {{file_path}}"
+exts          = ["toml"]
+cacheKeyFiles = ["tombi.toml"]

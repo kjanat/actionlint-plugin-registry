@@ -37,8 +37,8 @@ type Result struct {
 	PolicyVersion string          `json:"policy_version"`
 }
 
-// Validate accepts only a local regular-file snapshot. The caller owns its
-// immutable lifetime and must verify the download digest before invoking this.
+// Validate accepts only a snapshot stored in a local regular file. The caller must
+// verify its checksum before calling Validate and keep the file unchanged until it returns.
 func Validate(ctx context.Context, path string) (Result, error) {
 	if strings.Contains(path, "://") {
 		return Result{}, errors.New("validation requires a local snapshot")

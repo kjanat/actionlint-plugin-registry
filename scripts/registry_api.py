@@ -1,4 +1,4 @@
-"""Bounded HTTPS/OIDC client. Credentials never enter files or exception output."""
+"""Send authenticated HTTPS requests with size limits and without exposing credentials."""
 
 import json
 import os
@@ -92,7 +92,9 @@ def oidc_token(audience, environ, provider="github"):
             or parsed.password
             or parsed.fragment
         ):
-            raise ValueError("GitHub OIDC endpoint unavailable; grant id-token: write")
+            raise ValueError(
+                "The GitHub OIDC endpoint is unavailable. Grant the job id-token: write permission."
+            )
         query = [
             (key, value)
             for key, value in urllib.parse.parse_qsl(parsed.query)

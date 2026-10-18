@@ -12,6 +12,7 @@ cache-mode: none
 concurrency:
   group: registry-admission
   cancel-in-progress: false
+  queue: max
 
 jobs:
   validate:
@@ -24,14 +25,14 @@ jobs:
     outputs:
       claimed: ${{ steps.claim.outputs.claimed }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: master
           persist-credentials: false
       - name: Claim authenticated publisher request
         id: claim
         run: python3 -B scripts/consume.py claim
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         if: steps.claim.outputs.claimed == 'true'
         with:
           go-version-file: go.mod
@@ -50,7 +51,7 @@ jobs:
           --report reports/admission.json
       - name: Preserve validation report
         if: always() && steps.claim.outputs.claimed == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: validation-report
           path: reports/*.json
@@ -58,7 +59,7 @@ jobs:
           retention-days: 30
       - name: Transfer accepted records and lease
         if: steps.claim.outputs.claimed == 'true'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: validated-submission
           path: |
@@ -73,15 +74,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write
-      id-token: write
+      contents: read
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Verify registry bot configuration
+        env:
+          APP_CLIENT_ID: ${{ vars.REGISTRY_APP_CLIENT_ID }}
+          APP_KEY_CONFIGURED: ${{ secrets.REGISTRY_APP_PRIVATE_KEY != '' }}
+        run: |
+          if [[ -z "$APP_CLIENT_ID" || "$APP_KEY_CONFIGURED" != 'true' ]]; then
+            printf '%s\n' 'Registry publication requires the REGISTRY_APP_CLIENT_ID variable and REGISTRY_APP_PRIVATE_KEY secret for the installed registry GitHub App.' >&2
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: master
-      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with: { go-version-file: go.mod, cache: false }
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: validated-submission
           path: accepted
@@ -90,10 +100,33 @@ jobs:
         run: go run ./cmd/registry merge
           --store registry/plugins
           --candidate accepted/candidate/plugins
-      - name: Commit accepted records
+      # The App credential is minted only after trusted code finishes merging data.
+      - name: Create registry bot installation token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+        with:
+          client-id: ${{ vars.REGISTRY_APP_CLIENT_ID }}
+          private-key: ${{ secrets.REGISTRY_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+      - name: Commit accepted records as the registry bot
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [[ ! "$APP_SLUG" =~ ^[a-z0-9-]+$ ]]; then
+            printf '%s\n' 'GitHub returned an invalid registry App slug.' >&2
+            exit 1
+          fi
+          bot_id="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
+          if [[ ! "$bot_id" =~ ^[0-9]+$ ]]; then
+            printf '%s\n' 'GitHub did not return a numeric user ID for the registry bot.' >&2
+            exit 1
+          fi
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+          gh auth setup-git
           git add -- registry/plugins
           if ! git diff --cached --quiet; then
             git commit -m 'chore(registry): accept validated plugin release'
@@ -105,8 +138,8 @@ jobs:
       contents: read
       pages: write
       id-token: write
-    # Token-created commits do not trigger push workflows; invoke Pages explicitly.
-    uses: ./.github/workflows/pages.yml
+    # Data-only App pushes skip Pages; this call keeps deployment tied to completion.
+    uses: $/.github/workflows/pages.yml
 
   complete:
     needs: pages
@@ -116,15 +149,14 @@ jobs:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: master
-          persist-credentials: false
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { ref: refs/heads/master, persist-credentials: false }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: validated-submission
           path: accepted
       # Published means the accepted record reached Pages, not merely a Git commit.
       - name: Complete published submission
         run: python3 -B scripts/consume.py complete
-          --lease accepted/handoff/lease.json --status published
+          --lease accepted/handoff/lease.json
+          --status published

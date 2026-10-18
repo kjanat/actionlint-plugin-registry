@@ -1,41 +1,46 @@
 # Embedded plugin metadata
 
-Admission policy 1 requires exactly one **top-level** `actionlint.plugin` WASM
-custom section containing a JSON object, at most 1 MiB. The pinned host rejects
-duplicate sections, duplicate JSON members, malformed framing and invalid UTF-8.
+Version 1 of the admission policy requires each plugin to contain exactly one
+**top-level** `actionlint.plugin` WASM custom section. The section must contain a
+JSON object no larger than 1 MiB. The selected actionlint host rejects duplicate
+sections, duplicate JSON members, malformed section headers, and invalid UTF-8.
 Metadata in a component's nested core module does not describe the component.
 The registry never inserts missing metadata into a publisher's artifact.
 
 Both formats require `metadata_version: 1`, `id`, `name`, `description`, `license`,
-`repository` (canonical HTTPS repository URL), and `plugin_version`. The authenticated
-release repository must match `repository`; version and tag must match after
-removing at most one leading lowercase `v` from each. License is a publisher
-declaration, not an independent license audit.
+`repository`, and `plugin_version`. The `repository` field must contain the canonical
+HTTPS URL of the repository identified by the authenticated release. The plugin
+version must match the release tag after removing at most one leading lowercase
+`v` from each. The registry records the license declared by the publisher; it does
+not independently audit that declaration.
 
-The complete original JSON is retained in each accepted version record, including
-unknown discovery fields. Claimed capabilities are declarations; acceptance does
-not prove the implementation's behavior beyond the documented checks.
+Each accepted version record retains the complete original JSON, including fields
+the registry does not recognize. A capability declaration describes what the
+publisher claims the plugin supports. Validation checks only the behavior described
+below.
 
 ## Core modules
 
-Use the existing actionlint core JSON ABI metadata object, unchanged:
+Use actionlint's existing metadata format for the core JSON ABI:
 
-- `abi_version: 1`, `transport: "wasm-core-json"`.
-- Explicit version-1 implementations in `interfaces.check`,
+- Set `abi_version` to `1` and `transport` to `"wasm-core-json"`.
+- Declare version 1 implementations in `interfaces.check`,
   `interfaces.validate_config`, and `interfaces.metadata`.
-- Valid rule descriptors and usable engine/shell registration.
-- A valid `config_schema` when `capabilities.config_schema` is true.
+- Supply valid rule descriptors and an engine configuration that the host can register.
+- Include a valid `config_schema` when `capabilities.config_schema` is `true`.
 
-The host compares the **whole** embedded object with runtime `metadata()`,
-including fields unknown to its Go metadata projection. JSON object order and
-whitespace are immaterial. Configuration schemas also traverse actual application
-registration and default-option validation; remote schema fetches are forbidden.
+The host compares the entire embedded object with the value returned by
+`metadata()`, including fields its Go metadata types do not recognize. JSON member
+order and whitespace do not affect the comparison. The validator also registers
+configuration schemas with the application and validates the default options.
+Schemas cannot fetch remote resources.
 
 ## Components
 
-This is a **registry metadata profile**, not an existing WIT requirement. The
-component must still pass the pinned host's structural WIT validation. Publishers
-must embed this profile during packaging; components without it are rejected.
+The registry requires components to include the metadata shown below. This is an
+additional registry requirement; it is not part of the existing WIT contract.
+The host separately checks that the component's exported types match that contract.
+Publishers must embed the metadata when packaging the component.
 
 ```json
 {
@@ -57,27 +62,33 @@ must embed this profile during packaging; components without it are rejected.
 }
 ```
 
-`descriptor` uses the host's public `rule.Descriptor` JSON fields plus `requires`
-with the WIT fact names. It must match the complete runtime `describe()` result,
-including rule metadata, examples, options schema and required facts. Optional
-empty fields normalize through the public Go descriptor. Unsupported descriptor
-members are rejected. The comparison happens before analysis invocations.
+The `descriptor` object uses the JSON fields of the host's public `rule.Descriptor`
+type. Its additional `requires` field lists the WIT facts the component needs.
+The object must match the complete result returned by `describe()`, including rule
+metadata, examples, the options schema, and required facts. The validator uses the
+public Go descriptor type to normalize optional empty fields and rejects unsupported
+fields. It compares the descriptors before invoking analysis.
 
-The contract digest above is the generated canonical WIT digest at host commit
-`abe9f897d9d8d019c572142626b8f055352f2ac7`. An interface name alone is insufficient.
-Host upgrades must update the pin, digest, profile and compatibility fixtures together.
+The contract checksum above was generated from the canonical WIT definition at
+actionlint commit `abe9f897d9d8d019c572142626b8f055352f2ac7`. Matching the interface
+name alone does not establish compatibility. When upgrading the host, update the
+selected commit, contract checksum, metadata requirements, and compatibility
+fixtures together.
 
 ## Checks and limits
 
-The validator runs a fresh child process without inherited credentials, with a
-45-second outer deadline and bounded stdout/stderr. Individual guest calls have
-10-second deadlines; guest linear memory is bounded. `GOMEMLIMIT=512MiB` is a Go GC
-target, not an OS memory limit.
+Each validation runs in a new child process without inherited credentials. The
+process has a 45-second deadline, and the parent limits how much standard output
+and standard error it retains. Each guest call has a 10-second deadline, and the
+host limits guest linear memory. `GOMEMLIMIT=512MiB` sets a target for Go's garbage
+collector; it does not impose an operating-system memory limit.
 
-Checks include static metadata, ABI/WIT structure, static/runtime consistency,
-application registration, default configuration, repeated sample invocations,
-diagnostic positions and fixes. Known Ruff/ShellCheck fixtures additionally require
-F821/SC2086 respectively. Samples do not prove general analyzer correctness.
+The validator checks embedded metadata, ABI or WIT compatibility, and agreement
+between embedded metadata and runtime responses. It also checks application
+registration, default configuration, repeated analysis of sample inputs, diagnostic
+positions, and fixes. The Ruff sample must produce F821, and the ShellCheck sample
+must produce SC2086. These samples do not establish that an analyzer behaves
+correctly for every input.
 
 `go run ./cmd/registry inspect --artifact plugin.wasm` performs local compatibility
 checks only. It does not authorize or publish a release.

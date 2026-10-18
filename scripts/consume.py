@@ -94,5 +94,5 @@ if __name__ == "__main__":
         main()
     except (ValueError, TypeError, KeyError, OSError):
         sys.exit(
-            "Registry consumer request failed; the lease remains eligible for retry."
+            "The registry request failed. Any unfinished claim will become eligible for retry when its lease expires."
         )

@@ -10,8 +10,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "lib": ["ES2023"],
-    "types": ["@cloudflare/workers-types", "bun"],
-    "paths": { "@/*": ["./src/*"] }
+    "types": ["./worker-configuration.d.ts", "bun"]
   },
   "include": ["src/**/*.ts", "test/**/*.ts"]
 }

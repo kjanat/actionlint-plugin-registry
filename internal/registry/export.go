@@ -66,10 +66,10 @@ func Export(index Index, directory string) error {
 	page := template.Must(template.New("index").Parse(`<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>actionlint plugin registry</title>
 <style>body{font:1rem system-ui;max-width:70rem;margin:3rem auto;padding:1rem}td,th{text-align:left;padding:.5rem}code{overflow-wrap:anywhere}</style>
-<h1>actionlint plugin registry</h1><p>OIDC-authorized, digest-pinned publisher releases, automatically tested with a pinned actionlint host. Compatibility checks are not a security audit or a correctness guarantee.</p>
-<p><a href="index.json">Machine-readable index</a> · <a href="https://github.com/kjanat/actionlint-plugin-registry">Submit a plugin / documentation</a></p>
-<table><thead><tr><th>Plugin</th><th>Version</th><th>Kind</th><th>Pinned source</th></tr></thead><tbody>
-{{range .Entries}}<tr><td>{{.Submission.Repository}}</td><td>{{.Submission.Tag}}</td><td>{{.Submission.Kind}}</td><td><code>{{.PinnedURL}}</code></td></tr>{{else}}<tr><td colspan="4">No accepted releases yet. Publication requires verified publisher identity and plugin validation.</td></tr>{{end}}
+<h1>actionlint plugin registry</h1><p>This catalogue lists plugin releases that passed actionlint's compatibility checks. Each entry identifies its publisher and records a download URL and checksum. Acceptance does not guarantee that a plugin is safe or correct.</p>
+<p><a href="index.json">Download the JSON index</a> · <a href="https://github.com/kjanat/actionlint-plugin-registry#publishing">Learn how to publish a plugin</a></p>
+<table><thead><tr><th>Plugin</th><th>Version</th><th>Format</th><th>Download URL and checksum</th></tr></thead><tbody>
+{{range .Entries}}<tr><td>{{.Submission.Repository}}</td><td>{{.Submission.Tag}}</td><td>{{.Submission.Kind}}</td><td><code>{{.PinnedURL}}</code></td></tr>{{else}}<tr><td colspan="4">The registry has not accepted any releases yet. Publishers must authenticate through their CI provider and submit a plugin that passes validation.</td></tr>{{end}}
 </tbody></table></html>`))
 	f, err := os.Create(filepath.Join(directory, "index.html"))
 	if err != nil {

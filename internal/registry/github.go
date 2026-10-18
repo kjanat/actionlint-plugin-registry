@@ -52,8 +52,8 @@ func newGitHub(token string, transport http.RoundTripper) (*GitHub, error) {
 	}}}, nil
 }
 
-// Apply policy beneath both SDKs so their default request headers cannot select
-// an older API. Bound response bodies before the typed SDK decodes them.
+// Set the API version in the shared transport so neither SDK can override it
+// with an older default. Limit response sizes before the typed SDK decodes them.
 type apiTransport struct{ base http.RoundTripper }
 
 func (t apiTransport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -152,7 +152,7 @@ func (g *GitHub) Download(ctx context.Context, s Submission, asset *github.Relea
 	return nil
 }
 
-// Candidates enumerates a bounded release window; explicit submissions can admit older versions.
+// Candidates lists a limited number of recent releases. Publishers can submit older versions directly.
 func (g *GitHub) Candidates(ctx context.Context, s Source) ([]Submission, error) {
 	if err := s.Validate(); err != nil {
 		return nil, err
@@ -180,7 +180,7 @@ func (g *GitHub) Candidates(ctx context.Context, s Source) ([]Submission, error)
 	return result, nil
 }
 
-// ResolveRelease implements the provider boundary; no publisher URL is accepted.
+// ResolveRelease resolves a GitHub release using its repository and tag, rather than a publisher-supplied URL.
 func (g *GitHub) ResolveRelease(ctx context.Context, s Submission) (Release, error) {
 	entry, asset, err := g.Resolve(ctx, s)
 	if err != nil {

@@ -144,8 +144,8 @@ func (s Store) Load() (Index, error) {
 	return index, nil
 }
 
-// Merge validates the complete delta before writing any records. The trusted
-// publication workflow serializes writers; immutable files are never replaced.
+// Merge validates every candidate record before writing any of them. The publication
+// workflow permits only one writer at a time, and existing immutable files are never replaced.
 func (s Store) Merge(candidate Index) error {
 	if candidate.SchemaVersion != 1 {
 		return errors.New("unsupported candidate schema_version")

@@ -30,7 +30,7 @@ func run(ctx context.Context, args []string) error {
 	}
 	if args[0] == "_validate" {
 		if len(args) != 2 {
-			return errors.New("internal worker requires local artifact path")
+			return errors.New("the internal validator requires a local artifact path")
 		}
 		result, err := validation.Validate(ctx, args[1])
 		reply := registry.WorkerReply{Result: result}
@@ -40,19 +40,19 @@ func run(ctx context.Context, args []string) error {
 		return json.NewEncoder(os.Stdout).Encode(reply)
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
-	storePath := flags.String("store", "registry/plugins", "accepted plugin record directory")
-	receiptPath := flags.String("receipt", "", "authenticated Worker receipt JSON")
-	reportPath := flags.String("report", "", "write machine-readable report")
-	artifactPath := flags.String("artifact", "", "local WASM artifact for compatibility checks only")
-	candidatePath := flags.String("candidate", "", "validated candidate plugin directory to merge")
-	outputPath := flags.String("output", "dist", "static site output directory")
-	pluginID := flags.String("plugin", "", "provider/repository or host/repository namespace")
-	version := flags.String("version", "", "exact accepted release tag")
+	storePath := flags.String("store", "registry/plugins", "Read or write accepted plugin records in this directory.")
+	receiptPath := flags.String("receipt", "", "Read the JSON receipt obtained from an authenticated Worker claim.")
+	reportPath := flags.String("report", "", "Write a JSON report to this file.")
+	artifactPath := flags.String("artifact", "", "Check this local WASM file for compatibility without publishing it.")
+	candidatePath := flags.String("candidate", "", "Merge validated plugin records from this directory.")
+	outputPath := flags.String("output", "dist", "Write the generated catalogue to this directory.")
+	pluginID := flags.String("plugin", "", "Identify the plugin by provider/repository or host/repository.")
+	version := flags.String("version", "", "Resolve this exact accepted release tag.")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
 	if flags.NArg() != 0 {
-		return errors.New("unexpected positional arguments")
+		return errors.New("this command does not accept positional arguments")
 	}
 	executable, err := os.Executable()
 	if err != nil {
@@ -105,7 +105,7 @@ func run(ctx context.Context, args []string) error {
 		return store.Merge(candidate)
 	case "admit":
 		if *receiptPath == "" {
-			return errors.New("admit requires --receipt from authenticated Worker handoff")
+			return errors.New("admit requires --receipt to reference a receipt obtained from an authenticated Worker claim")
 		}
 		data, err := readBounded(*receiptPath, 32<<10)
 		if err != nil {

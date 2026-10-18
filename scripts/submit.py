@@ -1,4 +1,4 @@
-"""Submit release metadata with publisher OIDC; never execute release artifacts."""
+"""Authenticate the publisher with OIDC and submit release metadata without executing the plugin."""
 
 import os
 import re
@@ -55,7 +55,7 @@ def main():
     response = request_json(ORIGIN + "/v1/submissions", token, entry)
     identifier = uuid_value(response.get("id"))
     output("submission-id", identifier)
-    print("Submission queued: " + identifier)
+    print("The registry queued submission " + identifier + " for validation.")
 
 
 if __name__ == "__main__":
@@ -63,5 +63,5 @@ if __name__ == "__main__":
         main()
     except (ValueError, TypeError, KeyError, OSError):
         sys.exit(
-            "Submission failed; verify release metadata, OIDC permissions and registry availability."
+            "The submission failed. Check the release metadata, OIDC permissions, and registry availability."
         )

@@ -27,7 +27,7 @@ type ReleaseProvider interface {
 }
 
 // GitLab supports public gitlab.com projects and project-owned generic packages.
-// These packages are mutable upstream; accepted records and SHA256 pins are not.
+// Publishers can modify these packages, but accepted registry records and checksums cannot change.
 type GitLab struct{ client *http.Client }
 
 func NewGitLab() *GitLab {

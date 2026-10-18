@@ -3,23 +3,23 @@ description: Submit a release using GitHub OIDC. The calling job requires id-tok
 branding: { icon: package, color: blue }
 inputs:
   repository:
-    description: Public owner/repository containing the immutable plugin release.
+    description: Specify the public repository containing the immutable release, using owner/repository.
     default: ${{ github.repository }}
   tag:
-    description: Exact immutable release tag; must match the OIDC tag ref.
+    description: Specify the exact release tag. It must match the tag in the OIDC token.
     default: ${{ github.ref_name }}
   asset:
-    description: Exact WASM release asset filename.
+    description: Specify the exact filename of the WASM asset attached to the release.
     required: true
   sha256:
-    description: Expected SHA-256 digest of the release asset.
+    description: Provide the SHA-256 checksum of the release asset.
     required: true
   kind:
-    description: Plugin ABI, core or component.
+    description: Set the plugin format to core or component.
     required: true
 outputs:
   submission-id:
-    description: Queued submission identifier; admission is asynchronous.
+    description: Use this identifier to check the submission status while validation runs.
     value: ${{ steps.submit.outputs.submission-id }}
 runs:
   using: composite
