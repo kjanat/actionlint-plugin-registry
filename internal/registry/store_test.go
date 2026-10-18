@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/google/go-github/v83/github"
-	"github.com/kjanat/actionlint-plugin-registry/internal/validation"
+	"registry.actionlint.kjanat.dev/internal/validation"
 )
 
 func acceptedFixture(t *testing.T) Entry {

@@ -7,10 +7,10 @@
   "workers_dev": false,
   "preview_urls": false,
   "routes": [
-    { "pattern": "plugins.actionlint.kjanat.dev", "custom_domain": true }
+    { "pattern": "registry.actionlint.kjanat.dev", "custom_domain": true }
   ],
   "vars": {
-    "REGISTRY_ORIGIN": "https://plugins.actionlint.kjanat.dev",
+    "REGISTRY_ORIGIN": "https://registry.actionlint.kjanat.dev",
     "REGISTRY_REPOSITORY_ID": "1424600475",
     "REGISTRY_WORKFLOW_REF": "kjanat/actionlint-plugin-registry/.github/workflows/admission.yml@refs/heads/master"
   },

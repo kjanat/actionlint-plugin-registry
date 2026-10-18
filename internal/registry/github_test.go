@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/google/go-github/v83/github"
-	"github.com/kjanat/actionlint-plugin-registry/internal/validation"
+	"registry.actionlint.kjanat.dev/internal/validation"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)

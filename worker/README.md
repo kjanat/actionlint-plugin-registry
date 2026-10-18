@@ -18,8 +18,8 @@ and credentials.
 
 ## Authentication
 
-- Publisher tokens must use the audience `https://plugins.actionlint.kjanat.dev`.
-- Validator tokens must use the audience `https://plugins.actionlint.kjanat.dev/validator`.
+- Publisher tokens must use the audience `https://registry.actionlint.kjanat.dev`.
+- Validator tokens must use the audience `https://registry.actionlint.kjanat.dev/validator`.
 - Only GitHub Actions and GitLab.com issuers are configured. JWKS endpoints are
   fixed in the source code, so JWT headers cannot redirect key retrieval to another
   URL. The `jose` library verifies the RS256 signature, exact audience, issuer, and
@@ -45,6 +45,8 @@ the job built the submitted file. Build attestations and the hosting provider's
 release immutability guarantees provide separate evidence.
 
 ## HTTP contract
+
+`GET /` and `HEAD /` redirect to the [plugin catalogue](https://plugins.actionlint.kjanat.dev/).
 
 JSON request bodies must not exceed 16 KiB, and submissions can contain only the
 documented fields. POST requests must include `Authorization: Bearer <OIDC token>`.
@@ -144,7 +146,7 @@ that submits and validates a plugin using tokens issued by a real CI provider.
 
 Before deploying, check the account, domain, repository ID, and workflow reference
 in `wrangler.jsonc`. Then run `bunx wrangler deploy` from this directory. The Worker
-uses `plugins.actionlint.kjanat.dev`. Access through workers.dev and preview URLs is
+uses `registry.actionlint.kjanat.dev`. Access through workers.dev and preview URLs is
 disabled.
 
 References: [Cloudflare SQLite storage](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/),

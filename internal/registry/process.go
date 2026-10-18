@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/kjanat/actionlint-plugin-registry/internal/validation"
+	"registry.actionlint.kjanat.dev/internal/validation"
 )
 
 type WorkerReply struct {
@@ -34,7 +34,7 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 }
 
 // ProcessValidator excludes API/publication credentials from the runtime process.
-// Guest memory and call deadlines are enforced by the pinned actionlint host.
+// The configured actionlint host enforces guest memory and call deadlines.
 func ProcessValidator(executable string) Validator {
 	return func(ctx context.Context, path string) (result validation.Result, err error) {
 		ctx, cancel := context.WithTimeout(ctx, 45*time.Second)

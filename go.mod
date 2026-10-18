@@ -1,4 +1,4 @@
-module github.com/kjanat/actionlint-plugin-registry
+module registry.actionlint.kjanat.dev
 
 go 1.27.0
 

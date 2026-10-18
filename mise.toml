@@ -15,3 +15,25 @@ env     = { RUNNER_DIR = "worker" }
 command = "run"
 args    = ["biome"]
 env     = { RUNNER_DIR = "worker" }
+
+[tasks.setup]
+description = "Install project dependencies."
+dir         = "worker"
+run         = "bun install --frozen-lockfile"
+
+[tasks.check]
+description = "Run project checks."
+depends     = ["test:go", "lint:go", "test:python", "check:worker"]
+
+[tasks."test:go"]
+run = "go test ./internal/registry ./internal/validation ./cmd/registry"
+
+[tasks."lint:go"]
+run = "golangci-lint run --allow-parallel-runners"
+
+[tasks."test:python"]
+run = 'python -B -m unittest discover -s scripts -p "test_*.py"'
+
+[tasks."check:worker"]
+dir = "worker"
+run = ["bun run lint", "bun run typecheck", "bun test", "bun run check:bundle"]

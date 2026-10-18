@@ -96,7 +96,7 @@ func inspectMetadata(ctx context.Context, info plugin.ArtifactInfo) (embeddedMet
 		}
 	case plugin.ComponentArtifact:
 		if metadata.Transport != "wasm-component" || metadata.Interface != componentInterface || metadata.ContractSHA256 != componentContractDigest {
-			return metadata, errors.New("embedded component metadata must identify the pinned analyzer interface and contract digest")
+			return metadata, errors.New("embedded component metadata must identify the required analyzer interface and contract digest")
 		}
 		if metadata.Descriptor == nil || metadata.Descriptor.Name != metadata.ID {
 			return metadata, errors.New("embedded component metadata requires a descriptor matching its id")

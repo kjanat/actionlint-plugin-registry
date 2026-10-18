@@ -1,4 +1,4 @@
-// Package validation exercises plugins using the pinned actionlint host.
+// Package validation exercises plugins using the configured actionlint host.
 // Run it in a disposable, credential-free process with an outer deadline.
 package validation
 
@@ -149,7 +149,7 @@ func validateCore(ctx context.Context, path string) (result Result, err error) {
 // The public host exposes LoadEngine, but not localapp.configure or the CLI's
 // generic backend.Register. Bundled Ruff and ShellCheck registrations replace
 // their backend before generic registration and supply their own shell selection.
-// Keep these constraints aligned with those pinned host paths.
+// Keep these constraints aligned with the configured host paths.
 // Selectors must also be canonical: the host lowercases the executable basename
 // and strips .exe before matching, so mixed-case and suffixed selectors never run.
 func engineRegistration(name string, shells []string) error {

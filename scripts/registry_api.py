@@ -7,7 +7,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-ORIGIN = "https://plugins.actionlint.kjanat.dev"
+ORIGIN = "https://registry.actionlint.kjanat.dev"
 MAX_RESPONSE = 1024 * 1024
 
 

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kjanat/actionlint-plugin-registry/internal/validation"
+	"registry.actionlint.kjanat.dev/internal/validation"
 )
 
 type Validator func(context.Context, string) (validation.Result, error)

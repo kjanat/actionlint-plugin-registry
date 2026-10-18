@@ -4,11 +4,8 @@ This registry lists actionlint plugins and automatically accepts releases that p
 its compatibility checks. Publishers host their own binaries; the registry stores
 download links, checksums, metadata, and validation results.
 
-The registry and Cloudflare Worker source code are public. Keep deployment
-credentials and OIDC tokens out of Git.
-
-- Publication API: **https://plugins.actionlint.kjanat.dev**
-- Static catalogue: **https://kjanat.github.io/actionlint-plugin-registry/**
+- Publication API: **https://registry.actionlint.kjanat.dev**
+- Static catalogue: **https://plugins.actionlint.kjanat.dev/**
 - Publishers do not need individual approval. The registry accepts every authorized
   submission that passes validation.
 - OIDC identifies who authorized a submission. Acceptance means the plugin passed
@@ -76,7 +73,7 @@ Request this audience:
 register:
   id_tokens:
     REGISTRY_ID_TOKEN:
-      aud: https://plugins.actionlint.kjanat.dev
+      aud: https://registry.actionlint.kjanat.dev
   rules:
     - if: $CI_COMMIT_TAG
   script:
@@ -168,40 +165,7 @@ Actionlint does not yet resolve registry names itself. Disable a conflicting bui
 analyzer when replacing it, for example `--shellcheck=`. [Schemas](schemas/) describe
 submission, receipt, plugin, version and catalogue data.
 
-## Validation and development
+## Contributing
 
-The validator uses actionlint commit `abe9f897d9d8d019c572142626b8f055352f2ac7`.
-Updating the host does not replace the evidence stored in previously accepted
-records. See the [metadata and execution checks](docs/metadata.md) for details.
-Downloads must not exceed 64 MiB, and decompressed WASM must not exceed 128 MiB.
-The validator runs in a child process without inherited credentials. Its guest
-limits do not provide the isolation of an operating-system sandbox.
-
-```sh
-go test ./internal/registry ./internal/validation ./cmd/registry
-golangci-lint run --allow-parallel-runners
-python3 -B -m unittest discover -s scripts -p 'test_*.py'
-go run ./cmd/registry inspect --artifact /path/to/plugin.wasm
-go run ./cmd/registry export --store registry/plugins --output dist
-cd worker
-bun install --frozen-lockfile
-bun run typecheck
-bun test
-bun run check:bundle
-```
-
-The project requires Go 1.27.0 or newer and selects Go 1.27.2 in `go.mod`.
-It uses `cli/go-gh/v2` for GitHub authentication and `google/go-github/v83` to call
-GitHub API version `2026-03-10`. GitLab requests use the documented public endpoints
-and do not include authentication credentials.
-
-The registry workflow uses `admit --receipt` and `merge --candidate` to pass data
-between trusted jobs. These commands are not public submission APIs. A receipt file
-does not contain a verifiable signature; the workflow must obtain it from the
-Worker over HTTPS after authenticating with OIDC. Never pass a receipt supplied by
-a publisher to the job that writes registry records. The `inspect` command checks
-compatibility without authorizing publication.
-
-To deploy the Worker, run `bunx wrangler deploy` from `worker/`. It uses a custom
-domain and a SQLite Durable Object. Access through workers.dev and preview URLs is
-disabled. None of the checks listed above requires a development server.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development requirements, validation
+commands, and deployment instructions.

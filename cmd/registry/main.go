@@ -11,8 +11,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/kjanat/actionlint-plugin-registry/internal/registry"
-	"github.com/kjanat/actionlint-plugin-registry/internal/validation"
+	"registry.actionlint.kjanat.dev/internal/registry"
+	"registry.actionlint.kjanat.dev/internal/validation"
 )
 
 func main() {

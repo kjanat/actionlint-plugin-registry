@@ -4,7 +4,7 @@ import { generateKeyPair, SignJWT } from 'jose';
 import { consumer, githubIssuer, gitlabIssuer, publisher, verify } from '#auth';
 import { submission } from '#model';
 
-const origin = 'https://plugins.actionlint.kjanat.dev';
+const origin = 'https://registry.actionlint.kjanat.dev';
 const s = submission({
 	schema_version: 1,
 	provider: 'github',

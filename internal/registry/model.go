@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kjanat/actionlint-plugin-registry/internal/validation"
+	"registry.actionlint.kjanat.dev/internal/validation"
 )
 
 const MaxArtifactBytes int64 = 64 << 20
