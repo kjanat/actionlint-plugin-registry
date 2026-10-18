@@ -38,7 +38,9 @@ func TestSharedReceiptFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if receipt.Identity.RunID != "1:1" || receipt.Submission != sampleSubmission() {
+	expected := sampleSubmission()
+	expected.SHA256 = "fe0a035dd5a29c90e6f16cf9d7a63ce80ca832c07cd0113c278da046ce7f08a0"
+	if receipt.Identity.RunID != "1:1" || receipt.Submission != expected {
 		t.Fatal("shared receipt protocol changed")
 	}
 	for _, payload := range []string{

@@ -11,8 +11,8 @@ import (
 	"os/signal"
 	"syscall"
 
+	"registry.actionlint.kjanat.dev/internal/artifact"
 	"registry.actionlint.kjanat.dev/internal/registry"
-	"registry.actionlint.kjanat.dev/internal/validation"
 )
 
 func main() {
@@ -26,27 +26,18 @@ func main() {
 
 func run(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: registry <admit|inspect|resolve|merge|export> [flags]")
-	}
-	if args[0] == "_validate" {
-		if len(args) != 2 {
-			return errors.New("the internal validator requires a local artifact path")
-		}
-		result, err := validation.Validate(ctx, args[1])
-		reply := registry.WorkerReply{Result: result}
-		if err != nil {
-			reply.Error = err.Error()
-		}
-		return json.NewEncoder(os.Stdout).Encode(reply)
+		return errors.New("usage: registry <admit|inspect|check|resolve|merge|export> [flags]")
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	storePath := flags.String("store", "registry/plugins", "Read or write accepted plugin records in this directory.")
 	receiptPath := flags.String("receipt", "", "Read the JSON receipt obtained from an authenticated Worker claim.")
 	reportPath := flags.String("report", "", "Write a JSON report to this file.")
-	artifactPath := flags.String("artifact", "", "Check this local WASM file for compatibility without publishing it.")
+	artifactPath := flags.String("artifact", "", "Inspect this local WASM file or check it with an adapter.")
 	candidatePath := flags.String("candidate", "", "Merge validated plugin records from this directory.")
 	outputPath := flags.String("output", "dist", "Write the generated catalogue to this directory.")
 	pluginID := flags.String("plugin", "", "Identify the plugin by provider/repository or host/repository.")
+	checker := flags.String("checker", "", "Run this trusted checker executable for an optional compatibility observation.")
+	evidencePath := flags.String("compatibility", "registry/compatibility", "Read or append host compatibility observations in this directory.")
 	version := flags.String("version", "", "Resolve this exact accepted release tag.")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
@@ -54,30 +45,18 @@ func run(ctx context.Context, args []string) error {
 	if flags.NArg() != 0 {
 		return errors.New("this command does not accept positional arguments")
 	}
-	executable, err := os.Executable()
-	if err != nil {
-		return err
-	}
-	validate := registry.ProcessValidator(executable)
 	if args[0] == "inspect" {
 		if *artifactPath == "" {
 			return errors.New("inspect requires --artifact")
 		}
-		result, err := validate(ctx, *artifactPath)
-		reply := registry.WorkerReply{Result: result}
+		declaration, err := artifact.Inspect(ctx, *artifactPath)
 		if err != nil {
-			reply.Error = err.Error()
+			return err
 		}
 		if *reportPath != "" {
-			if writeErr := registry.WriteJSON(*reportPath, reply); writeErr != nil {
-				return writeErr
-			}
-		} else {
-			if writeErr := json.NewEncoder(os.Stdout).Encode(reply); writeErr != nil {
-				return writeErr
-			}
+			return registry.WriteJSON(*reportPath, declaration)
 		}
-		return err
+		return json.NewEncoder(os.Stdout).Encode(declaration)
 	}
 	store := registry.Store{Directory: *storePath}
 	index, err := store.Load()
@@ -85,6 +64,22 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 	switch args[0] {
+	case "check":
+		if *checker == "" || *artifactPath == "" || *pluginID == "" || *version == "" {
+			return errors.New("check requires --checker, --artifact, --plugin and --version")
+		}
+		entry, err := registry.Find(index, *pluginID, *version)
+		if err != nil {
+			return err
+		}
+		evidence, err := registry.CheckCompatibility(ctx, *checker, *artifactPath, entry)
+		if err != nil {
+			return err
+		}
+		if err = (registry.EvidenceStore{Directory: *evidencePath}).Add(index, evidence); err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(evidence)
 	case "resolve":
 		value, err := registry.Resolve(index, *pluginID, *version)
 		if err != nil {
@@ -93,7 +88,11 @@ func run(ctx context.Context, args []string) error {
 		fmt.Println(value)
 		return nil
 	case "export":
-		return registry.Export(index, *outputPath)
+		evidence, err := (registry.EvidenceStore{Directory: *evidencePath}).Load(index)
+		if err != nil {
+			return err
+		}
+		return registry.Export(index, *outputPath, evidence...)
 	case "merge":
 		if *candidatePath == "" {
 			return errors.New("merge requires --candidate")
@@ -125,7 +124,7 @@ func run(ctx context.Context, args []string) error {
 		} else {
 			providers["gitlab"] = registry.NewGitLab()
 		}
-		service := registry.Service{Providers: providers, Validate: validate}
+		service := registry.Service{Providers: providers}
 		report := registry.NewReport("admit")
 		entry, admissionErr := service.Admit(ctx, &index, receipt)
 		if admissionErr == nil {

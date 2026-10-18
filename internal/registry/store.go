@@ -24,7 +24,7 @@ type Plugin struct {
 }
 
 func pluginFor(e Entry) Plugin {
-	return Plugin{1, e.Receipt.Identity.Issuer, e.Receipt.Identity.RepositoryID, e.Receipt.Identity.OwnerID, e.Submission.Provider, e.Submission.Repository, e.Validation.PluginID, e.Submission.Asset, e.Submission.Kind}
+	return Plugin{1, e.Receipt.Identity.Issuer, e.Receipt.Identity.RepositoryID, e.Receipt.Identity.OwnerID, e.Submission.Provider, e.Submission.Repository, e.PluginID(), e.Submission.Asset, e.Submission.Kind}
 }
 
 type Store struct{ Directory string }

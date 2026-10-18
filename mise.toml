@@ -23,13 +23,17 @@ run         = "bun install --frozen-lockfile"
 
 [tasks.check]
 description = "Run project checks."
-depends     = ["test:go", "lint:go", "test:python", "check:worker"]
+depends     = ["test:go", "lint:go", "check:adapter", "test:python", "check:worker"]
 
 [tasks."test:go"]
-run = "go test ./internal/registry ./internal/validation ./cmd/registry"
+run = "go test ./..."
 
 [tasks."lint:go"]
 run = "golangci-lint run --allow-parallel-runners"
+
+[tasks."check:adapter"]
+dir = "adapters/actionlint"
+run = ["go test ./...", "golangci-lint run --allow-parallel-runners"]
 
 [tasks."test:python"]
 run = 'python -B -m unittest discover -s scripts -p "test_*.py"'
@@ -37,3 +41,6 @@ run = 'python -B -m unittest discover -s scripts -p "test_*.py"'
 [tasks."check:worker"]
 dir = "worker"
 run = ["bun run lint", "bun run typecheck", "bun test", "bun run check:bundle"]
+
+[tasks.modernize]
+run = "go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -fix ./..."

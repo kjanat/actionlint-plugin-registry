@@ -8,15 +8,25 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"registry.actionlint.kjanat.dev/internal/compatibility"
 )
 
-func Resolve(index Index, repository, tag string) (string, error) {
+func Find(index Index, repository, tag string) (Entry, error) {
 	for _, e := range index.Entries {
 		if (strings.EqualFold(e.Submission.Provider+"/"+e.Submission.Repository, repository) || strings.EqualFold(e.Submission.Provider+".com/"+e.Submission.Repository, repository)) && e.Submission.Tag == tag {
-			return e.PinnedURL(), nil
+			return e, nil
 		}
 	}
-	return "", fmt.Errorf("no accepted version %s@%s", repository, tag)
+	return Entry{}, fmt.Errorf("no accepted version %s@%s", repository, tag)
+}
+
+func Resolve(index Index, repository, tag string) (string, error) {
+	entry, err := Find(index, repository, tag)
+	if err != nil {
+		return "", err
+	}
+	return entry.PinnedURL(), nil
 }
 
 type Catalog struct {
@@ -28,16 +38,48 @@ type CatalogPlugin struct {
 	PluginID string `json:"plugin_id"`
 	Manifest string `json:"manifest"`
 }
+type CompatibilityLink struct {
+	Host    compatibility.Host `json:"host"`
+	Policy  string             `json:"policy"`
+	Outcome string             `json:"outcome"`
+	Report  string             `json:"report"`
+}
+
 type VersionLink struct {
-	Version string `json:"version"`
-	Record  string `json:"record"`
+	Compatibility []CompatibilityLink `json:"compatibility"`
+	Version       string              `json:"version"`
+	Record        string              `json:"record"`
 }
 type PluginManifest struct {
 	Plugin   Plugin        `json:"plugin"`
 	Versions []VersionLink `json:"versions"`
 }
 
-func Export(index Index, directory string) error {
+func Export(index Index, directory string, evidence ...compatibility.Evidence) error {
+	observations := map[string][]CompatibilityLink{}
+	for _, item := range evidence {
+		if err := item.Validate(); err != nil {
+			return err
+		}
+		accepted := false
+		for _, entry := range index.Entries {
+			if entry.Submission.SHA256 == item.Report.ArtifactSHA256 {
+				accepted = true
+			}
+		}
+		if !accepted {
+			return errors.New("cannot export evidence for an unknown artifact")
+		}
+		name, err := evidenceName(item)
+		if err != nil {
+			return err
+		}
+		path := "compatibility/" + item.Report.ArtifactSHA256 + "/" + name
+		if err = WriteJSON(filepath.Join(directory, filepath.FromSlash(path)), item); err != nil {
+			return err
+		}
+		observations[item.Report.ArtifactSHA256] = append(observations[item.Report.ArtifactSHA256], CompatibilityLink{Host: item.Report.Host, Policy: item.Report.Policy, Outcome: item.Report.Outcome, Report: "../../" + path})
+	}
 	catalog := Catalog{SchemaVersion: 1, Plugins: []CatalogPlugin{}}
 	manifests := map[string]PluginManifest{}
 	for _, entry := range index.Entries {
@@ -45,10 +87,10 @@ func Export(index Index, directory string) error {
 		manifest, ok := manifests[id]
 		if !ok {
 			manifest = PluginManifest{Plugin: pluginFor(entry), Versions: []VersionLink{}}
-			catalog.Plugins = append(catalog.Plugins, CatalogPlugin{Name: entry.Submission.Provider + ".com/" + entry.Submission.Repository, PluginID: entry.Validation.PluginID, Manifest: "plugins/" + id + "/index.json"})
+			catalog.Plugins = append(catalog.Plugins, CatalogPlugin{Name: entry.Submission.Provider + ".com/" + entry.Submission.Repository, PluginID: entry.PluginID(), Manifest: "plugins/" + id + "/index.json"})
 		}
 		filename := key(entry.Submission.Tag) + ".json"
-		manifest.Versions = append(manifest.Versions, VersionLink{entry.Submission.Tag, "versions/" + filename})
+		manifest.Versions = append(manifest.Versions, VersionLink{Version: entry.Submission.Tag, Record: "versions/" + filename, Compatibility: append([]CompatibilityLink{}, observations[entry.Submission.SHA256]...)})
 		manifests[id] = manifest
 		if err := WriteJSON(filepath.Join(directory, "plugins", id, "versions", filename), entry); err != nil {
 			return err
@@ -66,10 +108,10 @@ func Export(index Index, directory string) error {
 	page := template.Must(template.New("index").Parse(`<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>actionlint plugin registry</title>
 <style>body{font:1rem system-ui;max-width:70rem;margin:3rem auto;padding:1rem}td,th{text-align:left;padding:.5rem}code{overflow-wrap:anywhere}</style>
-<h1>actionlint plugin registry</h1><p>This catalogue lists plugin releases that passed actionlint's compatibility checks. Each entry identifies its publisher and records a download URL and checksum. Acceptance does not guarantee that a plugin is safe or correct.</p>
+<h1>actionlint plugin registry</h1><p>This catalogue lists authenticated plugin releases with verified checksums and discovery metadata. Each entry identifies its publisher and records a download URL and checksum. Acceptance does not guarantee that a plugin is safe or correct.</p>
 <p><a href="index.json">Download the JSON index</a> · <a href="https://github.com/kjanat/actionlint-plugin-registry#publishing">Learn how to publish a plugin</a></p>
 <table><thead><tr><th>Plugin</th><th>Version</th><th>Format</th><th>Download URL and checksum</th></tr></thead><tbody>
-{{range .Entries}}<tr><td>{{.Submission.Repository}}</td><td>{{.Submission.Tag}}</td><td>{{.Submission.Kind}}</td><td><code>{{.PinnedURL}}</code></td></tr>{{else}}<tr><td colspan="4">The registry has not accepted any releases yet. Publishers must authenticate through their CI provider and submit a plugin that passes validation.</td></tr>{{end}}
+{{range .Entries}}<tr><td>{{.Submission.Repository}}</td><td>{{.Submission.Tag}}</td><td>{{.Submission.Kind}}</td><td><code>{{.PinnedURL}}</code></td></tr>{{else}}<tr><td colspan="4">The registry has not accepted any releases yet. Publishers must authenticate through their CI provider and submit a release that passes admission checks.</td></tr>{{end}}
 </tbody></table></html>`))
 	f, err := os.Create(filepath.Join(directory, "index.html"))
 	if err != nil {

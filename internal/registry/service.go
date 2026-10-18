@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"registry.actionlint.kjanat.dev/internal/validation"
+	"registry.actionlint.kjanat.dev/internal/artifact"
 )
 
-type Validator func(context.Context, string) (validation.Result, error)
+type Inspector func(context.Context, string) (artifact.Declaration, error)
 
 type Failure struct {
 	Repository string `json:"repository"`
@@ -35,7 +35,7 @@ func NewReport(mode string) Report {
 
 type Service struct {
 	Providers map[string]ReleaseProvider
-	Validate  Validator
+	Inspect   Inspector
 }
 
 func (service Service) Admit(ctx context.Context, index *Index, receipt Receipt) (Entry, error) {
@@ -72,7 +72,7 @@ func (service Service) Admit(ctx context.Context, index *Index, receipt Receipt)
 			return old, nil
 		}
 	}
-	entry.Validation, err = func() (result validation.Result, err error) {
+	declaration, err := func() (result artifact.Declaration, err error) {
 		dir, err := os.MkdirTemp("", "actionlint-registry-")
 		if err != nil {
 			return result, err
@@ -82,18 +82,24 @@ func (service Service) Admit(ctx context.Context, index *Index, receipt Receipt)
 		if err = provider.DownloadRelease(ctx, s, release, path); err != nil {
 			return result, err
 		}
-		return service.Validate(ctx, path)
+		inspect := service.Inspect
+		if inspect == nil {
+			inspect = artifact.Inspect
+		}
+		return inspect(ctx, path)
 	}()
 	if err != nil {
-		return Entry{}, fmt.Errorf("plugin validation: %w", err)
+		return Entry{}, fmt.Errorf("plugin inspection: %w", err)
 	}
-	if entry.Validation.Kind != s.Kind {
+	if declaration.Kind != s.Kind {
 		return Entry{}, errors.New("binary kind disagrees with submission")
 	}
 	expectedRepository := "https://" + s.Provider + ".com/" + s.Repository
-	if !strings.EqualFold(entry.Validation.Repository, expectedRepository) || strings.TrimPrefix(entry.Validation.PluginVersion, "v") != strings.TrimPrefix(s.Tag, "v") {
+	if !strings.EqualFold(declaration.Repository, expectedRepository) || strings.TrimPrefix(declaration.PluginVersion, "v") != strings.TrimPrefix(s.Tag, "v") {
 		return Entry{}, errors.New("embedded repository or version disagrees with authenticated release")
 	}
+	entry.RecordVersion = 2
+	entry.Artifact = &declaration
 	entry.AcceptedAt = time.Now().UTC()
 	if err = index.Add(entry); err != nil {
 		return Entry{}, err

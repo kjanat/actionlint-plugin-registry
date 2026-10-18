@@ -5,7 +5,7 @@
   ],
   "packageRules": [
     {
-      "description": "Update both actionlint host pins together after manual approval.",
+      "description": "Update the actionlint checker after manual approval.",
       "matchManagers": ["gomod"],
       "matchPackageNames": ["actionlint.kjanat.dev", "github.com/kjanat/actionlint"],
       "groupName": "actionlint host",
@@ -13,7 +13,7 @@
       "dependencyDashboardApproval": true,
       "automerge": false,
       "prBodyNotes": [
-        "Update internal/validation/validation.go HostCommit to match the actionlint revision in both go.mod pins. Verify the WIT/ABI contract and runtime fixtures before merging."
+        "Update adapters/actionlint/internal/validation/validation.go HostCommit to match the actionlint revision in adapters/actionlint/go.mod. Verify the WIT/ABI contract and runtime fixtures before merging."
       ]
     }
   ]

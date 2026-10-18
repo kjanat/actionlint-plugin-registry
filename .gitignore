@@ -5,3 +5,6 @@
 /reports/
 /.tmp/
 /worker/worker-configuration.d.ts
+
+/actionlint-checker
+/actionlint-checker.exe

@@ -1,0 +1,50 @@
+{
+  "$id": "https://plugins.actionlint.kjanat.dev/schemas/artifact.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Host-independent artifact declaration",
+  "type": "object",
+  "required": [
+    "contract",
+    "kind",
+    "metadata",
+    "plugin_id",
+    "plugin_version",
+    "repository",
+    "sha256"
+  ],
+  "properties": {
+    "contract": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024
+    },
+    "kind": {
+      "enum": [
+        "core",
+        "component"
+      ]
+    },
+    "metadata": {
+      "type": "object"
+    },
+    "plugin_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "plugin_version": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "repository": {
+      "type": "string",
+      "format": "uri"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "additionalProperties": false
+}

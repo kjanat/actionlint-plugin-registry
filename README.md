@@ -1,15 +1,15 @@
 # actionlint plugin registry
 
-This registry lists actionlint plugins and automatically accepts releases that pass
-its compatibility checks. Publishers host their own binaries; the registry stores
-download links, checksums, metadata, and validation results.
+This registry lists actionlint plugins and automatically accepts authenticated
+releases with verified checksums and discovery metadata. Publishers host their own
+binaries. Host compatibility is recorded separately and does not control publication.
 
 - Publication API: **https://registry.actionlint.kjanat.dev**
 - Static catalogue: **https://plugins.actionlint.kjanat.dev/**
 - Publishers do not need individual approval. The registry accepts every authorized
-  submission that passes validation.
-- OIDC identifies who authorized a submission. Acceptance means the plugin passed
-  the documented checks; it does not guarantee that the plugin is safe or correct.
+  submission that passes admission checks.
+- OIDC identifies who authorized a submission. Acceptance means the release passed
+  the admission checks; it does not guarantee that the plugin is safe or correct.
 
 ## Publishing
 
@@ -18,7 +18,7 @@ The [metadata policy](docs/metadata.md) describes both supported WASM formats.
 Submit the SHA-256 checksum of the file you distribute. For `.wasm.gz` files,
 calculate the checksum of the compressed file.
 The Worker records the CI provider, project ID, and tag from the authenticated
-request. The validator then checks the project's identity and the commit referenced
+request. The admission service then checks the project's identity and the commit referenced
 by the tag against the hosting provider's API.
 
 ### GitHub Actions
@@ -109,12 +109,12 @@ publishers do not need individual approval.
 1. The publisher's CI job posts to `/v1/submissions` with an OIDC token whose audience is the publication API's origin.
 2. The Worker verifies the token's signature, issuer, audience, timestamps, and project and tag claims.
 3. A SQLite Durable Object records the request and a notification in the same transaction. It prevents the token or version from being reused for a different submission.
-4. The registry's GitHub App starts the validation workflow. That workflow authenticates with OIDC and claims a queued request. A scheduled run every five minutes provides a fallback.
-5. A job with read-only repository access downloads the submitted file and validates it using the selected actionlint host version.
+4. The registry's GitHub App starts the admission workflow. That workflow authenticates with OIDC and claims a queued request. A scheduled run every five minutes provides a fallback.
+5. A job with read-only repository access downloads the submitted file and verifies its checksum, container framing, and embedded discovery metadata. It does not execute the plugin.
 6. A separate job commits the accepted records using the registry App's bot identity. GitHub Pages then publishes the generated catalogues.
 7. The workflow marks the submission `published` only after Pages succeeds.
 
-The registry uses its own GitHub App to start validation and publish accepted
+The registry uses its own GitHub App to start admission and publish accepted
 records. The App is installed only on the registry repository; publishers do not
 need to install it. See [GitHub App setup](docs/github-app.md) for its permissions
 and deployment configuration. GitHub may delay workflows, but queued requests
@@ -145,9 +145,10 @@ registry/plugins/<sha256(issuer + newline + project-id)>/
 The JSON records retain the original publisher, repository, and tag names. Directory
 and file names use hashes to avoid case collisions, reserved Windows filenames,
 and path traversal through tag names. Each version records its download URL,
-checksum, authenticated submission receipt, embedded metadata, release evidence,
-and validation result. The registry does not yet support changes to a plugin's
-identity or artifact selection, such as repository transfers or ABI migrations.
+checksum, authenticated submission receipt, embedded metadata, and release evidence.
+A new release can declare a new ABI or component interface without changing the
+registry. Repository transfers and changes to a plugin's identity, asset name, or
+container format still require a migration mechanism.
 
 The generated root `index.json` contains plugin summaries and links. Per-plugin indexes
 contain version summaries and links; version records contain full evidence and metadata.
@@ -164,6 +165,36 @@ actionlint --plugin 'https://publisher.example/plugin.wasm#sha256=...'
 Actionlint does not yet resolve registry names itself. Disable a conflicting built-in
 analyzer when replacing it, for example `--shellcheck=`. [Schemas](schemas/) describe
 submission, receipt, plugin, version and catalogue data.
+
+## Host compatibility
+
+Publication does not imply compatibility with any actionlint release. A release
+without compatibility reports is untested. Unknown ABIs and component contracts
+remain discoverable; the registry does not interpret their rule descriptors or facts.
+
+The optional [actionlint adapter](adapters/actionlint/) owns its own Go module and
+host dependency. The registry has no dependency on the actionlint SDK. Other host
+versions can use independent checker executables implementing the
+[report protocol](schemas/compatibility.schema.json).
+
+A trusted operator can run a checker against a local copy of an accepted artifact:
+
+```sh
+go -C adapters/actionlint build -o ../../actionlint-checker .
+go run ./cmd/registry check --checker ./actionlint-checker \
+  --artifact plugin.wasm --plugin github.com/owner/plugin --version v1.0.0
+```
+
+Reports are independent immutable files under
+`registry/compatibility/<artifact-sha256>/<report-sha256>.json`. They identify the
+exact artifact, host revision, checker executable checksum, policy, time, and outcome.
+The catalogue links to these reports per version. Adding a report never rewrites
+an accepted release. Existing records retain their historical inline validation.
+
+The checker is trusted operator code. It runs with a deadline and bounded output,
+without inherited registry credentials. This process boundary is not an operating
+system sandbox. Admission never starts a checker, and a missing or crashing checker
+cannot block publication. See [metadata and checks](docs/metadata.md).
 
 ## Contributing
 

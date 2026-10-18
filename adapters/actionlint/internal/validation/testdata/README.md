@@ -15,7 +15,7 @@ They are licensed under the MIT license. `ACTIONLINT-LICENSE` retains the upstre
 The incompatible components export the expected interface name, but their exported
 types do not match the contract. The tests must reject them before invoking them.
 
-The host can load `core-echo.wasm`, but the registry rejects it because it omits
+The host can load `core-echo.wasm`, but this checker rejects it because it omits
 rule descriptors. The tests in `core_fixture_test.go` generate core fixtures that
 can pass validation. One uses Ruff's registration format to test the bundled
 backend without generic shell selectors.

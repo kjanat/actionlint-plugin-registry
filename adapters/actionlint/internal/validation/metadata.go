@@ -17,6 +17,8 @@ import (
 
 // These constants identify the contract generated at HostCommit.
 // The selected host validates the component's WIT types before starting the guest.
+var ErrUnsupportedContract = errors.New("contract is not supported by this checker")
+
 const componentInterface = "kjanat:actionlint/analyzer@0.1.0"
 const componentContractDigest = "a0096f562ab3da46b30d0f025ad1c6ed0d46e5b7ea1a53660b3214e3270fcbee"
 
@@ -55,6 +57,35 @@ func inspectMetadata(ctx context.Context, info plugin.ArtifactInfo) (embeddedMet
 	if len(info.Metadata) == 0 {
 		return metadata, errors.New("registry admission requires a top-level actionlint.plugin custom section")
 	}
+	// Read only contract identity before touching host-specific descriptors.
+	// An unfamiliar ABI may legitimately change their JSON representation.
+	switch info.Kind {
+	case plugin.CoreArtifact:
+		var contract struct {
+			ABI       uint32 `json:"abi_version"`
+			Transport string `json:"transport"`
+		}
+		if err := jsonv2.Unmarshal(info.Metadata, &contract); err != nil {
+			return metadata, fmt.Errorf("core contract declaration: %w", err)
+		}
+		if contract.ABI != 1 || contract.Transport != "wasm-core-json" {
+			return metadata, ErrUnsupportedContract
+		}
+	case plugin.ComponentArtifact:
+		var contract struct {
+			Transport string `json:"transport"`
+			Interface string `json:"interface"`
+			Digest    string `json:"contract_sha256"`
+		}
+		if err := jsonv2.Unmarshal(info.Metadata, &contract); err != nil {
+			return metadata, fmt.Errorf("component contract declaration: %w", err)
+		}
+		if contract.Transport != "wasm-component" || contract.Interface != componentInterface || contract.Digest != componentContractDigest {
+			return metadata, ErrUnsupportedContract
+		}
+	default:
+		return metadata, ErrUnsupportedContract
+	}
 	// Unknown discovery fields remain in Result.Metadata. The host performs the
 	// same complete JSON comparison for core metadata, including unknown fields.
 	if err := jsonv2.Unmarshal(info.Metadata, &metadata); err != nil {
@@ -73,7 +104,7 @@ func inspectMetadata(ctx context.Context, info plugin.ArtifactInfo) (embeddedMet
 	switch info.Kind {
 	case plugin.CoreArtifact:
 		if metadata.ABIVersion != 1 || metadata.Transport != "wasm-core-json" {
-			return metadata, errors.New("embedded core metadata requires ABI 1 and wasm-core-json transport")
+			return metadata, fmt.Errorf("%w: requires ABI 1 and wasm-core-json transport", ErrUnsupportedContract)
 		}
 		for _, operation := range []string{"check", "validate_config", "metadata"} {
 			compatible := false
@@ -96,7 +127,7 @@ func inspectMetadata(ctx context.Context, info plugin.ArtifactInfo) (embeddedMet
 		}
 	case plugin.ComponentArtifact:
 		if metadata.Transport != "wasm-component" || metadata.Interface != componentInterface || metadata.ContractSHA256 != componentContractDigest {
-			return metadata, errors.New("embedded component metadata must identify the required analyzer interface and contract digest")
+			return metadata, fmt.Errorf("%w: analyzer interface or contract digest differs", ErrUnsupportedContract)
 		}
 		if metadata.Descriptor == nil || metadata.Descriptor.Name != metadata.ID {
 			return metadata, errors.New("embedded component metadata requires a descriptor matching its id")

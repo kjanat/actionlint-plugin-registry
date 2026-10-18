@@ -1,0 +1,127 @@
+{
+  "$id": "https://plugins.actionlint.kjanat.dev/schemas/compatibility.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "host": {
+      "type": "object",
+      "required": [
+        "name",
+        "revision"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "revision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      },
+      "additionalProperties": false
+    },
+    "report": {
+      "type": "object",
+      "required": [
+        "artifact_sha256",
+        "checks",
+        "host",
+        "outcome",
+        "policy",
+        "schema_version"
+      ],
+      "properties": {
+        "artifact_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "checks": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          }
+        },
+        "detail": {
+          "type": "string",
+          "maxLength": 16384
+        },
+        "host": {
+          "$ref": "#/$defs/host"
+        },
+        "outcome": {
+          "enum": [
+            "passed",
+            "failed",
+            "unsupported"
+          ]
+        },
+        "policy": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "schema_version": {
+          "const": 1
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "passed"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "checks": {
+                "minItems": 1
+              },
+              "detail": {
+                "const": ""
+              }
+            }
+          },
+          "else": {
+            "required": [
+              "detail"
+            ],
+            "properties": {
+              "detail": {
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "title": "Immutable host compatibility observation",
+  "type": "object",
+  "required": [
+    "checker_sha256",
+    "observed_at",
+    "report"
+  ],
+  "properties": {
+    "checker_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "observed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "report": {
+      "$ref": "#/$defs/report"
+    }
+  },
+  "additionalProperties": false
+}

@@ -17,10 +17,46 @@
       "items": {
         "type": "object",
         "required": [
+          "compatibility",
           "record",
           "version"
         ],
         "properties": {
+          "compatibility": {
+            "description": "Independent host observations; an empty list means untested.",
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "host",
+                "outcome",
+                "policy",
+                "report"
+              ],
+              "properties": {
+                "host": {
+                  "$ref": "compatibility.schema.json#/$defs/host"
+                },
+                "outcome": {
+                  "enum": [
+                    "passed",
+                    "failed",
+                    "unsupported"
+                  ]
+                },
+                "policy": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 256
+                },
+                "report": {
+                  "type": "string",
+                  "pattern": "^../../compatibility/[a-f0-9]{64}/[a-f0-9]{64}\\.json$"
+                }
+              },
+              "additionalProperties": false
+            }
+          },
           "record": {
             "type": "string",
             "pattern": "^versions/[a-f0-9]{64}\\.json$"

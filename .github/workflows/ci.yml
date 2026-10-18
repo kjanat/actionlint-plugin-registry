@@ -24,9 +24,24 @@ jobs:
         run: go test ./...
       - name: golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
-        with: { version-file: ".tool-versions", skip-cache: true }
+        with: { version-file: "${{ github.workspace }}/.tool-versions", skip-cache: true }
       - name: Test submission action
         run: python3 -B -m unittest discover -s scripts -p 'test_*.py'
+
+  adapter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults: { run: { working-directory: adapters/actionlint } }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { persist-credentials: false }
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with: { go-version-file: adapters/actionlint/go.mod, cache: false }
+      - name: Test actionlint checker
+        run: go test ./...
+      - name: Lint actionlint checker
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
+        with: { version-file: "../../.tool-versions", working-directory: adapters/actionlint, skip-cache: true }
 
   worker:
     runs-on: ubuntu-latest

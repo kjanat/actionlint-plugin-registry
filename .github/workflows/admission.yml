@@ -37,11 +37,11 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - name: Build trusted validator
+      - name: Build registry admission service
         if: steps.claim.outputs.claimed == 'true'
         run: go build -o registry-cli ./cmd/registry
-      # Child validation strips credentials. This job never receives repository write access.
-      - name: Validate authenticated release
+      # Admission reads metadata without executing publisher code. This job has no repository write access.
+      - name: Verify authenticated release
         if: steps.claim.outputs.claimed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -49,7 +49,7 @@ jobs:
           --receipt handoff/receipt.json
           --store candidate/plugins
           --report reports/admission.json
-      - name: Preserve validation report
+      - name: Preserve admission report
         if: always() && steps.claim.outputs.claimed == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
@@ -95,7 +95,7 @@ jobs:
         with:
           name: validated-submission
           path: accepted
-      # Only validated JSON records cross jobs; no publisher WASM executes here.
+      # Only accepted JSON records cross jobs; no publisher WASM executes here.
       - name: Merge immutable version records
         run: go run ./cmd/registry merge
           --store registry/plugins

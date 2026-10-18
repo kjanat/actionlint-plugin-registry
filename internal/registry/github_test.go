@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/google/go-github/v93/github"
-	"registry.actionlint.kjanat.dev/internal/validation"
+	"registry.actionlint.kjanat.dev/internal/artifact"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -26,9 +26,31 @@ func response(r *http.Request, body string) *http.Response {
 	return &http.Response{StatusCode: http.StatusOK, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(body)), Request: r}
 }
 
+func sampleBody() string {
+	metadata := []byte(`{"metadata_version":1,"abi_version":999,"transport":"wasm-core-json","id":"example","name":"Example","description":"Example plugin","license":"MIT","repository":"https://github.com/publisher/plugin","plugin_version":"1.0.0","future":{"number":9007199254740993}}`)
+	section := append([]byte{17}, []byte("actionlint.plugin")...)
+	section = append(section, metadata...)
+	module := []byte{0, 97, 115, 109, 1, 0, 0, 0, 0}
+	for size := len(section); ; size >>= 7 {
+		value := byte(size & 127)
+		if size >= 128 {
+			value |= 128
+		}
+		module = append(module, value)
+		if size < 128 {
+			break
+		}
+	}
+	return string(append(module, section...))
+}
+
 func sampleSubmission() Submission {
-	digest := sha256.Sum256([]byte("wasm sample"))
+	digest := sha256.Sum256([]byte(sampleBody()))
 	return Submission{1, "github", "publisher/plugin", "v1.0.0", "plugin.wasm", hex.EncodeToString(digest[:]), "core"}
+}
+
+func sampleDeclaration() artifact.Declaration {
+	return artifact.Declaration{Kind: "core", SHA256: sampleSubmission().SHA256, PluginID: "example", PluginVersion: "1.0.0", Repository: "https://github.com/publisher/plugin", Contract: "wasm-core-json/999", Metadata: json.RawMessage(`{"metadata_version":1,"abi_version":999,"transport":"wasm-core-json","id":"example","name":"Example","description":"Example plugin","license":"MIT","repository":"https://github.com/publisher/plugin","plugin_version":"1.0.0","future":{"number":9007199254740993}}`)}
 }
 
 func fixtureGitHub(t *testing.T, mutate func(*github.RepositoryRelease)) *GitHub {
@@ -44,7 +66,7 @@ func fixtureGitHub(t *testing.T, mutate func(*github.RepositoryRelease)) *GitHub
 		case "/repos/publisher/plugin/releases/tags/v1.0.0", "/repos/publisher/plugin/releases":
 			release := github.RepositoryRelease{
 				ID: 20, TagName: s.Tag, Immutable: new(true), PublishedAt: &github.Timestamp{Time: time.Now().UTC()},
-				Assets: []*github.ReleaseAsset{{ID: new(int64(30)), Name: new(s.Asset), State: new("uploaded"), Size: new(len("wasm sample")), Digest: new("sha256:" + s.SHA256), BrowserDownloadURL: new(assetURL(s))}},
+				Assets: []*github.ReleaseAsset{{ID: new(int64(30)), Name: new(s.Asset), State: new("uploaded"), Size: new(len(sampleBody())), Digest: new("sha256:" + s.SHA256), BrowserDownloadURL: new(assetURL(s))}},
 			}
 			mutate(&release)
 			var data []byte
@@ -72,7 +94,7 @@ func fixtureGitHub(t *testing.T, mutate func(*github.RepositoryRelease)) *GitHub
 		if r.Header.Get("Authorization") != "" || r.URL.String() != assetURL(s) {
 			t.Errorf("unexpected download request %s, headers %v", r.URL, r.Header)
 		}
-		return response(r, "wasm sample"), nil
+		return response(r, sampleBody()), nil
 	})
 	return client
 }
@@ -81,20 +103,20 @@ func TestAdmissionAndImmutableIdentity(t *testing.T) {
 	client := fixtureGitHub(t, func(*github.RepositoryRelease) {})
 	index := EmptyIndex()
 	calls := 0
-	service := Service{Providers: map[string]ReleaseProvider{"github": client}, Validate: func(_ context.Context, path string) (validation.Result, error) {
+	service := Service{Providers: map[string]ReleaseProvider{"github": client}, Inspect: func(_ context.Context, path string) (artifact.Declaration, error) {
 		calls++
 		data, err := os.ReadFile(path)
-		if err != nil || string(data) != "wasm sample" {
+		if err != nil || string(data) != sampleBody() {
 			t.Fatalf("validator received wrong snapshot: %q, %v", data, err)
 		}
-		return validation.Result{Kind: "core", PluginID: "example", Rules: []string{"example"}, Checks: []string{"host-abi"}, HostCommit: validation.HostCommit, PluginVersion: "1.0.0", Repository: "https://github.com/publisher/plugin", Metadata: json.RawMessage(`{"id":"example"}`), Contract: "wasm-core-json/1", PolicyVersion: "1"}, nil
+		return artifact.Inspect(t.Context(), path)
 	}}
 	s := sampleSubmission()
 	entry, err := service.Admit(t.Context(), &index, sampleReceipt())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if entry.RepositoryID != 10 || entry.ReleaseID != 20 || entry.AssetID != 30 || entry.Validation.HostCommit != validation.HostCommit {
+	if entry.RepositoryID != 10 || entry.ReleaseID != 20 || entry.AssetID != 30 || entry.Artifact.Contract != "wasm-core-json/999" {
 		t.Fatalf("missing authoritative identity: %+v", entry)
 	}
 	if _, err = service.Admit(t.Context(), &index, sampleReceipt()); err != nil || calls != 1 || len(index.Entries) != 1 {
@@ -118,7 +140,11 @@ func TestAdmissionAndImmutableIdentity(t *testing.T) {
 		"asset":      func(e *Entry) { e.AssetID++ },
 		"commit":     func(e *Entry) { e.Commit = strings.Repeat("b", 40) },
 		"digest":     func(e *Entry) { e.Submission.SHA256 = strings.Repeat("b", 64) },
-		"plugin":     func(e *Entry) { e.Validation.PluginID = "replacement" },
+		"plugin": func(e *Entry) {
+			declaration := *e.Artifact
+			declaration.PluginID = "replacement"
+			e.Artifact = &declaration
+		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			changed := entry
@@ -153,13 +179,13 @@ func TestReleaseRejections(t *testing.T) {
 	}
 }
 
-func TestValidationFailureDoesNotAdmit(t *testing.T) {
+func TestInspectionFailureDoesNotAdmit(t *testing.T) {
 	client := fixtureGitHub(t, func(*github.RepositoryRelease) {})
 	index := EmptyIndex()
 	var snapshot string
-	service := Service{Providers: map[string]ReleaseProvider{"github": client}, Validate: func(_ context.Context, path string) (validation.Result, error) {
+	service := Service{Providers: map[string]ReleaseProvider{"github": client}, Inspect: func(_ context.Context, path string) (artifact.Declaration, error) {
 		snapshot = path
-		return validation.Result{}, errors.New("incompatible WIT")
+		return artifact.Declaration{}, errors.New("malformed custom section")
 	}}
 	if _, err := service.Admit(t.Context(), &index, sampleReceipt()); err == nil || len(index.Entries) != 0 {
 		t.Fatal("failed plugin admitted")
@@ -183,14 +209,14 @@ func TestDownloadCloseFailurePreventsAdmission(t *testing.T) {
 	client := fixtureGitHub(t, func(*github.RepositoryRelease) {})
 	closeErr := errors.New("response close failed")
 	client.download.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		resp := response(r, "wasm sample")
-		resp.Body = failingCloseBody{Reader: strings.NewReader("wasm sample"), err: closeErr}
+		resp := response(r, sampleBody())
+		resp.Body = failingCloseBody{Reader: strings.NewReader(sampleBody()), err: closeErr}
 		return resp, nil
 	})
 	index := EmptyIndex()
-	service := Service{Providers: map[string]ReleaseProvider{"github": client}, Validate: func(context.Context, string) (validation.Result, error) {
+	service := Service{Providers: map[string]ReleaseProvider{"github": client}, Inspect: func(context.Context, string) (artifact.Declaration, error) {
 		t.Fatal("invoked validator after failed download cleanup")
-		return validation.Result{}, nil
+		return artifact.Declaration{}, nil
 	}}
 	if _, err := service.Admit(t.Context(), &index, sampleReceipt()); !errors.Is(err, closeErr) || len(index.Entries) != 0 {
 		t.Fatalf("download cleanup failure lost: %v, entries %d", err, len(index.Entries))

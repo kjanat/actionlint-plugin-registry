@@ -12,13 +12,13 @@ import (
 	"time"
 
 	"github.com/google/go-github/v93/github"
-	"registry.actionlint.kjanat.dev/internal/validation"
+	"registry.actionlint.kjanat.dev/internal/artifact"
 )
 
 func acceptedFixture(t *testing.T) Entry {
 	t.Helper()
-	service := Service{Providers: map[string]ReleaseProvider{"github": fixtureGitHub(t, func(*github.RepositoryRelease) {})}, Validate: func(context.Context, string) (validation.Result, error) {
-		return validation.Result{Kind: "core", PluginID: "example", Rules: []string{"example"}, Checks: []string{"host-abi"}, HostCommit: validation.HostCommit, PluginVersion: "1.0.0", Repository: "https://github.com/publisher/plugin", Metadata: json.RawMessage(`{"id":"example"}`), Contract: "wasm-core-json/1", PolicyVersion: "1"}, nil
+	service := Service{Providers: map[string]ReleaseProvider{"github": fixtureGitHub(t, func(*github.RepositoryRelease) {})}, Inspect: func(context.Context, string) (artifact.Declaration, error) {
+		return sampleDeclaration(), nil
 	}}
 	index := EmptyIndex()
 	entry, err := service.Admit(t.Context(), &index, sampleReceipt())
@@ -38,9 +38,9 @@ func TestReceiptBindingBeforeValidation(t *testing.T) {
 		"repository": func(r *Receipt) { r.Identity.Repository = "other/plugin" },
 	} {
 		t.Run(name, func(t *testing.T) {
-			service := Service{Providers: map[string]ReleaseProvider{"github": fixtureGitHub(t, func(*github.RepositoryRelease) {})}, Validate: func(context.Context, string) (validation.Result, error) {
-				t.Fatal("unauthorized publication reached guest")
-				return validation.Result{}, nil
+			service := Service{Providers: map[string]ReleaseProvider{"github": fixtureGitHub(t, func(*github.RepositoryRelease) {})}, Inspect: func(context.Context, string) (artifact.Declaration, error) {
+				t.Fatal("unauthorized publication reached inspection")
+				return artifact.Declaration{}, nil
 			}}
 			receipt := sampleReceipt()
 			mutate(&receipt)
@@ -113,7 +113,7 @@ func TestMergeValidatesWholeDeltaBeforeWriting(t *testing.T) {
 
 func TestMergeRejectsUnreadableRecordBeforeWriting(t *testing.T) {
 	entry := acceptedFixture(t)
-	entry.Validation.Metadata = json.RawMessage(`{"padding":"` + strings.Repeat("x", maxRecordBytes) + `"}`)
+	entry.Artifact.Metadata = json.RawMessage(`{"padding":"` + strings.Repeat("x", maxRecordBytes) + `"}`)
 	store := Store{Directory: filepath.Join(t.TempDir(), "plugins")}
 	if err := store.Merge(Index{SchemaVersion: 1, Entries: []Entry{entry}}); err == nil {
 		t.Fatal("oversized serialized record accepted")
@@ -149,7 +149,7 @@ func TestGitLabPublication(t *testing.T) {
 		case "/api/v4/projects/10/repository/tags/v1.0.0":
 			return response(r, `{"name":"v1.0.0","commit":{"id":"`+strings.Repeat("a", 40)+`"}}`), nil
 		case "/api/v4/projects/10/packages/generic/actionlint-plugin/v1.0.0/plugin.wasm":
-			return response(r, "wasm sample"), nil
+			return response(r, sampleBody()), nil
 		default:
 			return nil, errors.New("unexpected GitLab request")
 		}

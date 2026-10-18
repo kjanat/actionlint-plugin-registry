@@ -1,4 +1,4 @@
-// Package registry accepts authenticated plugin releases after verifying their checksums and host compatibility.
+// Package registry accepts authenticated plugin releases after verifying publisher identity, checksums and discovery metadata.
 package registry
 
 import (
@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"registry.actionlint.kjanat.dev/internal/validation"
+	"registry.actionlint.kjanat.dev/internal/artifact"
 )
 
 const MaxArtifactBytes int64 = 64 << 20
@@ -167,19 +167,66 @@ func key(value string) string {
 }
 func (r Receipt) PluginKey() string { return key(r.Identity.Issuer + "\n" + r.Identity.RepositoryID) }
 
+// LegacyValidation preserves historical records without importing their host SDK.
+type LegacyValidation struct {
+	Kind          string          `json:"kind"`
+	PluginID      string          `json:"plugin_id"`
+	PluginVersion string          `json:"plugin_version,omitempty"`
+	Rules         []string        `json:"rules"`
+	Checks        []string        `json:"checks"`
+	HostCommit    string          `json:"host_commit"`
+	Metadata      json.RawMessage `json:"metadata"`
+	Repository    string          `json:"repository"`
+	Contract      string          `json:"contract"`
+	PolicyVersion string          `json:"policy_version"`
+}
+
 type Entry struct {
-	Submission        Submission        `json:"submission"`
-	Receipt           Receipt           `json:"receipt"`
-	OwnerID           int64             `json:"owner_id"`
-	UpstreamImmutable bool              `json:"upstream_immutable"`
-	RepositoryID      int64             `json:"repository_id"`
-	ReleaseID         int64             `json:"release_id"`
-	AssetID           int64             `json:"asset_id"`
-	Commit            string            `json:"commit"`
-	URL               string            `json:"url"`
-	PublishedAt       time.Time         `json:"published_at"`
-	AcceptedAt        time.Time         `json:"accepted_at"`
-	Validation        validation.Result `json:"validation"`
+	RecordVersion     int                   `json:"record_version,omitempty"`
+	Artifact          *artifact.Declaration `json:"artifact,omitempty"`
+	Submission        Submission            `json:"submission"`
+	Receipt           Receipt               `json:"receipt"`
+	OwnerID           int64                 `json:"owner_id"`
+	UpstreamImmutable bool                  `json:"upstream_immutable"`
+	RepositoryID      int64                 `json:"repository_id"`
+	ReleaseID         int64                 `json:"release_id"`
+	AssetID           int64                 `json:"asset_id"`
+	Commit            string                `json:"commit"`
+	URL               string                `json:"url"`
+	PublishedAt       time.Time             `json:"published_at"`
+	AcceptedAt        time.Time             `json:"accepted_at"`
+	Validation        *LegacyValidation     `json:"validation,omitempty"`
+}
+
+func (e Entry) PluginID() string {
+	if e.Artifact != nil {
+		return e.Artifact.PluginID
+	}
+	if e.Validation != nil {
+		return e.Validation.PluginID
+	}
+	return ""
+}
+
+func (e Entry) declaration() (repository, version string, err error) {
+	switch {
+	case e.RecordVersion == 2 && e.Artifact != nil && e.Validation == nil:
+		if err = e.Artifact.Validate(); err != nil {
+			return "", "", err
+		}
+		if e.Artifact.Kind != e.Submission.Kind || e.Artifact.SHA256 != e.Submission.SHA256 {
+			return "", "", errors.New("artifact disagrees with submission")
+		}
+		return e.Artifact.Repository, e.Artifact.PluginVersion, nil
+	case e.RecordVersion == 0 && e.Artifact == nil && e.Validation != nil:
+		v := e.Validation
+		if !commitPattern.MatchString(v.HostCommit) || v.Kind != e.Submission.Kind || v.PluginID == "" || len(v.Rules) == 0 || len(v.Checks) == 0 || len(v.Metadata) == 0 || !json.Valid(v.Metadata) || v.Repository == "" || v.PluginVersion == "" || v.Contract == "" || v.PolicyVersion != "1" {
+			return "", "", errors.New("invalid historical validation evidence")
+		}
+		return v.Repository, v.PluginVersion, nil
+	default:
+		return "", "", errors.New("invalid release record version or declaration")
+	}
 }
 
 func (e Entry) PinnedURL() string { return e.URL + "#sha256=" + e.Submission.SHA256 }
@@ -204,12 +251,16 @@ func (i *Index) Add(e Entry) error {
 	if e.Receipt.Submission != e.Submission || strconv.FormatInt(e.RepositoryID, 10) != e.Receipt.Identity.RepositoryID || strconv.FormatInt(e.OwnerID, 10) != e.Receipt.Identity.OwnerID || e.Commit != e.Receipt.Identity.Commit {
 		return errors.New("entry disagrees with publication identity")
 	}
-	if e.RepositoryID <= 0 || !commitPattern.MatchString(e.Commit) || e.URL != releaseURL(e.Submission, e.RepositoryID) || e.PublishedAt.IsZero() || e.AcceptedAt.IsZero() || !commitPattern.MatchString(e.Validation.HostCommit) || e.Validation.Kind != e.Submission.Kind || e.Validation.PluginID == "" || len(e.Validation.Rules) == 0 || len(e.Validation.Checks) == 0 || len(e.Validation.Metadata) == 0 || !json.Valid(e.Validation.Metadata) || e.Validation.Repository == "" || e.Validation.PluginVersion == "" || e.Validation.Contract == "" || e.Validation.PolicyVersion != "1" {
-		return errors.New("entry lacks valid release identity or validation evidence")
+	if e.RepositoryID <= 0 || !commitPattern.MatchString(e.Commit) || e.URL != releaseURL(e.Submission, e.RepositoryID) || e.PublishedAt.IsZero() || e.AcceptedAt.IsZero() {
+		return errors.New("entry lacks valid release identity")
+	}
+	repository, version, err := e.declaration()
+	if err != nil {
+		return err
 	}
 	expectedRepository := "https://" + e.Submission.Provider + ".com/" + e.Submission.Repository
-	if !strings.EqualFold(e.Validation.Repository, expectedRepository) || strings.TrimPrefix(e.Validation.PluginVersion, "v") != strings.TrimPrefix(e.Submission.Tag, "v") {
-		return errors.New("validation metadata disagrees with release identity")
+	if !strings.EqualFold(repository, expectedRepository) || strings.TrimPrefix(version, "v") != strings.TrimPrefix(e.Submission.Tag, "v") {
+		return errors.New("embedded metadata disagrees with release identity")
 	}
 	if e.Submission.Provider == "github" && (e.ReleaseID <= 0 || e.AssetID <= 0 || !e.UpstreamImmutable) {
 		return errors.New("GitHub entry lacks immutable release identity")
@@ -221,7 +272,7 @@ func (i *Index) Add(e Entry) error {
 		if old.Receipt.PluginKey() != e.Receipt.PluginKey() && (old.Submission.Provider != e.Submission.Provider || !strings.EqualFold(old.Submission.Repository, e.Submission.Repository)) {
 			continue
 		}
-		if old.Receipt.PluginKey() != e.Receipt.PluginKey() || old.OwnerID != e.OwnerID || old.Submission.Repository != e.Submission.Repository || old.RepositoryID != e.RepositoryID || old.Submission.Asset != e.Submission.Asset || old.Submission.Kind != e.Submission.Kind || old.Validation.PluginID != e.Validation.PluginID {
+		if old.Receipt.PluginKey() != e.Receipt.PluginKey() || old.OwnerID != e.OwnerID || old.Submission.Repository != e.Submission.Repository || old.RepositoryID != e.RepositoryID || old.Submission.Asset != e.Submission.Asset || old.Submission.Kind != e.Submission.Kind || old.PluginID() != e.PluginID() {
 			return errors.New("registered repository identity, plugin identity or artifact selection changed")
 		}
 		if old.Submission.Tag == e.Submission.Tag {

@@ -20,13 +20,15 @@
     "repository_id",
     "submission",
     "upstream_immutable",
-    "url",
-    "validation"
+    "url"
   ],
   "properties": {
     "accepted_at": {
       "type": "string",
       "format": "date-time"
+    },
+    "artifact": {
+      "$ref": "artifact.schema.json"
     },
     "asset_id": {
       "type": "integer",
@@ -45,6 +47,9 @@
     },
     "receipt": {
       "$ref": "receipt.schema.json"
+    },
+    "record_version": {
+      "const": 2
     },
     "release_id": {
       "type": "integer",
@@ -127,5 +132,37 @@
       "additionalProperties": false
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "oneOf": [
+    {
+      "required": [
+        "validation"
+      ],
+      "not": {
+        "anyOf": [
+          {
+            "required": [
+              "record_version"
+            ]
+          },
+          {
+            "required": [
+              "artifact"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "required": [
+        "artifact",
+        "record_version"
+      ],
+      "not": {
+        "required": [
+          "validation"
+        ]
+      }
+    }
+  ]
 }

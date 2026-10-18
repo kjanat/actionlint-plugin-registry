@@ -1,7 +1,9 @@
 package validation
 
 import (
+	"actionlint.kjanat.dev/plugin"
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -117,5 +119,16 @@ func TestEmptyRequiredFactsAreEquivalent(t *testing.T) {
 	}
 	if declared.Requires == nil {
 		t.Fatal("comparison mutated declaration")
+	}
+}
+
+func TestUnknownContractCheckedBeforeHostSpecificFields(t *testing.T) {
+	for _, info := range []plugin.ArtifactInfo{
+		{Kind: plugin.ComponentArtifact, Metadata: []byte(`{"transport":"wasm-component","interface":"example:future/analyzer@2.0.0","contract_sha256":"future","abi_version":{"unrelated":"extension"},"descriptor":{"requires":{"new":"shape"}}}`)},
+		{Kind: plugin.CoreArtifact, Metadata: []byte(`{"transport":"wasm-core-json","abi_version":999,"interface":{"unrelated":"extension"},"interfaces":{"check":"new-shape"}}`)},
+	} {
+		if _, err := inspectMetadata(t.Context(), info); !errors.Is(err, ErrUnsupportedContract) {
+			t.Fatalf("unknown contract became runtime failure: %v", err)
+		}
 	}
 }
