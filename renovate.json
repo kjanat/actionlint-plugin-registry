@@ -2,5 +2,19 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
     "config:recommended"
+  ],
+  "packageRules": [
+    {
+      "description": "Update both actionlint host pins together after manual approval.",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["actionlint.kjanat.dev", "github.com/kjanat/actionlint"],
+      "groupName": "actionlint host",
+      "separateMajorMinor": false,
+      "dependencyDashboardApproval": true,
+      "automerge": false,
+      "prBodyNotes": [
+        "Update internal/validation/validation.go HostCommit to match the actionlint revision in both go.mod pins. Verify the WIT/ABI contract and runtime fixtures before merging."
+      ]
+    }
   ]
 }
