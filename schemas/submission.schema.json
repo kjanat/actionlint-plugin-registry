@@ -1,0 +1,92 @@
+{
+  "$id": "https://kjanat.github.io/actionlint-plugin-registry/schemas/submission.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "actionlint plugin submission",
+  "type": "object",
+  "required": [
+    "asset",
+    "kind",
+    "provider",
+    "repository",
+    "schema_version",
+    "sha256",
+    "tag"
+  ],
+  "properties": {
+    "asset": {
+      "type": "string",
+      "maxLength": 128,
+      "allOf": [
+        {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]*$"
+        },
+        {
+          "pattern": "\\.wasm(\\.gz)?$"
+        }
+      ]
+    },
+    "kind": {
+      "enum": [
+        "core",
+        "component"
+      ]
+    },
+    "provider": {
+      "enum": [
+        "github",
+        "gitlab"
+      ]
+    },
+    "repository": {
+      "type": "string",
+      "maxLength": 512,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)+$"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "tag": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$"
+    }
+  },
+  "additionalProperties": false,
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "provider": {
+            "const": "github"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "repository": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9-]{0,38}/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "provider": {
+            "const": "gitlab"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "repository": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*(/[A-Za-z0-9][A-Za-z0-9._-]*)+$"
+          }
+        }
+      }
+    }
+  ]
+}

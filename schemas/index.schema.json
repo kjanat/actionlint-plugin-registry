@@ -1,0 +1,42 @@
+{
+  "$id": "https://kjanat.github.io/actionlint-plugin-registry/schemas/index.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Generated plugin catalog",
+  "type": "object",
+  "required": [
+    "plugins",
+    "schema_version"
+  ],
+  "properties": {
+    "plugins": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "manifest",
+          "name",
+          "plugin_id"
+        ],
+        "properties": {
+          "manifest": {
+            "type": "string",
+            "minLength": 1
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "plugin_id": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "schema_version": {
+      "const": 1
+    }
+  },
+  "additionalProperties": false
+}

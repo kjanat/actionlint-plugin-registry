@@ -1,0 +1,59 @@
+{
+  "$id": "https://kjanat.github.io/actionlint-plugin-registry/schemas/plugin.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Registered publisher and plugin identity",
+  "type": "object",
+  "required": [
+    "asset",
+    "issuer",
+    "kind",
+    "owner_id",
+    "plugin_id",
+    "provider",
+    "repository",
+    "repository_id",
+    "schema_version"
+  ],
+  "properties": {
+    "asset": {
+      "type": "string",
+      "minLength": 1
+    },
+    "issuer": {
+      "type": "string",
+      "minLength": 1
+    },
+    "kind": {
+      "enum": [
+        "core",
+        "component"
+      ]
+    },
+    "owner_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "plugin_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider": {
+      "enum": [
+        "github",
+        "gitlab"
+      ]
+    },
+    "repository": {
+      "type": "string",
+      "minLength": 1
+    },
+    "repository_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "schema_version": {
+      "const": 1
+    }
+  },
+  "additionalProperties": false
+}

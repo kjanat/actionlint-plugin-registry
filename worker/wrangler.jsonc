@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "actionlint-plugin-registry",
+  "account_id": "83a61abe8741defe835d035b1f4e49af",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-18",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "plugins.actionlint.kjanat.dev", "custom_domain": true }],
+  "vars": {
+    "REGISTRY_ORIGIN": "https://plugins.actionlint.kjanat.dev",
+    "REGISTRY_REPOSITORY_ID": "1424600475",
+    "REGISTRY_WORKFLOW_REF": "kjanat/actionlint-plugin-registry/.github/workflows/admission.yml@refs/heads/master"
+  },
+  "durable_objects": { "bindings": [{ "name": "INBOX", "class_name": "PublicationInbox" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["PublicationInbox"] }]
+}

@@ -1,0 +1,14 @@
+[
+	{
+		"repository": "kjanat/actionlint-plugin-ruff",
+		"asset": "plugin.wasm",
+		"kind": "core",
+		"provider": "github"
+	},
+	{
+		"repository": "kjanat/actionlint-plugin-shellcheck",
+		"asset": "actionlint_plugin_shellcheck.wasm",
+		"kind": "component",
+		"provider": "github"
+	}
+]

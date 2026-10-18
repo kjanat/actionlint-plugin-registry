@@ -1,0 +1,130 @@
+name: Registry admission
+
+on:
+  schedule:
+    - cron: "2-57/5 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+cache-mode: none
+
+# A durable queue retains submissions; skipped schedules do not lose requests.
+concurrency:
+  group: registry-admission
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      claimed: ${{ steps.claim.outputs.claimed }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: master
+          persist-credentials: false
+      - name: Claim authenticated publisher request
+        id: claim
+        run: python3 -B scripts/consume.py claim
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        if: steps.claim.outputs.claimed == 'true'
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build trusted validator
+        if: steps.claim.outputs.claimed == 'true'
+        run: go build -o registry-cli ./cmd/registry
+      # Child validation strips credentials. This job never receives repository write access.
+      - name: Validate authenticated release
+        if: steps.claim.outputs.claimed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/validate.sh ./registry-cli admit
+          --receipt handoff/receipt.json
+          --store candidate/plugins
+          --report reports/admission.json
+      - name: Preserve validation report
+        if: always() && steps.claim.outputs.claimed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: validation-report
+          path: reports/*.json
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Transfer accepted records and lease
+        if: steps.claim.outputs.claimed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: validated-submission
+          path: |
+            candidate/plugins/
+            handoff/lease.json
+          if-no-files-found: error
+          retention-days: 1
+
+  publish:
+    needs: validate
+    if: needs.validate.outputs.claimed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: master
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with: { go-version-file: go.mod, cache: false }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: validated-submission
+          path: accepted
+      # Only validated JSON records cross jobs; no publisher WASM executes here.
+      - name: Merge immutable version records
+        run: go run ./cmd/registry merge
+          --store registry/plugins
+          --candidate accepted/candidate/plugins
+      - name: Commit accepted records
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -- registry/plugins
+          if ! git diff --cached --quiet; then
+            git commit -m 'chore(registry): accept validated plugin release'
+            git push origin HEAD:refs/heads/master
+          fi
+  pages:
+    needs: publish
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    # Token-created commits do not trigger push workflows; invoke Pages explicitly.
+    uses: ./.github/workflows/pages.yml
+
+  complete:
+    needs: pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: master
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: validated-submission
+          path: accepted
+      # Published means the accepted record reached Pages, not merely a Git commit.
+      - name: Complete published submission
+        run: python3 -B scripts/consume.py complete
+          --lease accepted/handoff/lease.json --status published

@@ -1,0 +1,89 @@
+{
+  "$id": "https://kjanat.github.io/actionlint-plugin-registry/schemas/receipt.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Authenticated publication receipt (trusted handoff only)",
+  "type": "object",
+  "required": [
+    "authorized_at",
+    "id",
+    "identity",
+    "schema_version",
+    "submission"
+  ],
+  "properties": {
+    "authorized_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "commit",
+        "issuer",
+        "owner_id",
+        "ref",
+        "repository",
+        "repository_id",
+        "run_id",
+        "subject",
+        "workflow"
+      ],
+      "properties": {
+        "commit": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-f0-9]{40}$"
+        },
+        "issuer": {
+          "enum": [
+            "https://token.actions.githubusercontent.com",
+            "https://gitlab.com"
+          ]
+        },
+        "owner_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "repository_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[1-9][0-9]*:[1-9][0-9]*$"
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workflow": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "submission": {
+      "$ref": "submission.schema.json"
+    }
+  },
+  "additionalProperties": false
+}

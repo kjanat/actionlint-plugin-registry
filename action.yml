@@ -1,0 +1,38 @@
+name: Submit actionlint plugin
+description: Submit a release using GitHub OIDC. The calling job requires id-token write permission.
+branding: { icon: package, color: blue }
+inputs:
+  repository:
+    description: Public owner/repository containing the immutable plugin release.
+    default: ${{ github.repository }}
+  tag:
+    description: Exact immutable release tag; must match the OIDC tag ref.
+    default: ${{ github.ref_name }}
+  asset:
+    description: Exact WASM release asset filename.
+    required: true
+  sha256:
+    description: Expected SHA-256 digest of the release asset.
+    required: true
+  kind:
+    description: Plugin ABI, core or component.
+    required: true
+outputs:
+  submission-id:
+    description: Queued submission identifier; admission is asynchronous.
+    value: ${{ steps.submit.outputs.submission-id }}
+runs:
+  using: composite
+  steps:
+    - name: Submit release metadata with OIDC
+      id: submit
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        PLUGIN_PROVIDER: github
+        PLUGIN_REPOSITORY: ${{ inputs.repository }}
+        PLUGIN_TAG: ${{ inputs.tag }}
+        PLUGIN_ASSET: ${{ inputs.asset }}
+        PLUGIN_SHA256: ${{ inputs.sha256 }}
+        PLUGIN_KIND: ${{ inputs.kind }}
+      run: python3 -B "$ACTION_PATH/scripts/submit.py"

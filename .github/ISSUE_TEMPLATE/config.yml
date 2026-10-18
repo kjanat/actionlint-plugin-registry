@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Publish a plugin release
+    url: https://github.com/kjanat/actionlint-plugin-registry#publishing
+    about: Publication requires publisher OIDC. Issues cannot authorize admission.

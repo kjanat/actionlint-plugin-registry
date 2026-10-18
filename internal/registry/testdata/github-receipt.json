@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "id": "00000000-0000-4000-8000-000000000001",
+  "submission": {
+    "schema_version": 1,
+    "provider": "github",
+    "repository": "publisher/plugin",
+    "tag": "v1.0.0",
+    "asset": "plugin.wasm",
+    "sha256": "fe0a035dd5a29c90e6f16cf9d7a63ce80ca832c07cd0113c278da046ce7f08a0",
+    "kind": "core"
+  },
+  "identity": {
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "repo:publisher/plugin:ref:refs/tags/v1.0.0",
+    "repository_id": "10",
+    "owner_id": "5",
+    "repository": "publisher/plugin",
+    "ref": "refs/tags/v1.0.0",
+    "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "workflow": "publisher/plugin/.github/workflows/release.yml@refs/tags/v1.0.0",
+    "run_id": "1:1"
+  },
+  "authorized_at": "2026-01-01T00:00:00Z"
+}
