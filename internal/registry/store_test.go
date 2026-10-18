@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-github/v83/github"
+	"github.com/google/go-github/v93/github"
 	"registry.actionlint.kjanat.dev/internal/validation"
 )
 

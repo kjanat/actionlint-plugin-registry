@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-github/v83/github"
+	"github.com/google/go-github/v93/github"
 	"registry.actionlint.kjanat.dev/internal/validation"
 )
 
@@ -43,8 +43,8 @@ func fixtureGitHub(t *testing.T, mutate func(*github.RepositoryRelease)) *GitHub
 			return response(r, `{"id":10,"full_name":"Publisher/Plugin","private":false,"owner":{"id":5}}`), nil
 		case "/repos/publisher/plugin/releases/tags/v1.0.0", "/repos/publisher/plugin/releases":
 			release := github.RepositoryRelease{
-				ID: github.Ptr(int64(20)), TagName: github.Ptr(s.Tag), Immutable: github.Ptr(true), PublishedAt: &github.Timestamp{Time: time.Now().UTC()},
-				Assets: []*github.ReleaseAsset{{ID: github.Ptr(int64(30)), Name: github.Ptr(s.Asset), State: github.Ptr("uploaded"), Size: github.Ptr(len("wasm sample")), Digest: github.Ptr("sha256:" + s.SHA256), BrowserDownloadURL: github.Ptr(assetURL(s))}},
+				ID: 20, TagName: s.Tag, Immutable: new(true), PublishedAt: &github.Timestamp{Time: time.Now().UTC()},
+				Assets: []*github.ReleaseAsset{{ID: new(int64(30)), Name: new(s.Asset), State: new("uploaded"), Size: new(len("wasm sample")), Digest: new("sha256:" + s.SHA256), BrowserDownloadURL: new(assetURL(s))}},
 			}
 			mutate(&release)
 			var data []byte
@@ -132,16 +132,16 @@ func TestAdmissionAndImmutableIdentity(t *testing.T) {
 
 func TestReleaseRejections(t *testing.T) {
 	for name, mutate := range map[string]func(*github.RepositoryRelease){
-		"mutable": func(r *github.RepositoryRelease) { r.Immutable = github.Ptr(false) },
-		"draft":   func(r *github.RepositoryRelease) { r.Draft = github.Ptr(true) },
-		"tag":     func(r *github.RepositoryRelease) { r.TagName = github.Ptr("other") },
+		"mutable": func(r *github.RepositoryRelease) { r.Immutable = new(false) },
+		"draft":   func(r *github.RepositoryRelease) { r.Draft = true },
+		"tag":     func(r *github.RepositoryRelease) { r.TagName = "other" },
 		"digest": func(r *github.RepositoryRelease) {
-			r.Assets[0].Digest = github.Ptr("sha256:" + strings.Repeat("0", 64))
+			r.Assets[0].Digest = new("sha256:" + strings.Repeat("0", 64))
 		},
 		"url": func(r *github.RepositoryRelease) {
-			r.Assets[0].BrowserDownloadURL = github.Ptr("https://example.com/plugin.wasm")
+			r.Assets[0].BrowserDownloadURL = new("https://example.com/plugin.wasm")
 		},
-		"size":      func(r *github.RepositoryRelease) { r.Assets[0].Size = github.Ptr(int(MaxArtifactBytes + 1)) },
+		"size":      func(r *github.RepositoryRelease) { r.Assets[0].Size = new(int(MaxArtifactBytes + 1)) },
 		"duplicate": func(r *github.RepositoryRelease) { r.Assets = append(r.Assets, r.Assets[0]) },
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -224,10 +224,10 @@ func TestDiscoverySkipsMutableAndPrerelease(t *testing.T) {
 		t.Run(skipped, func(t *testing.T) {
 			client := fixtureGitHub(t, func(r *github.RepositoryRelease) {
 				if skipped == "mutable" {
-					r.Immutable = github.Ptr(false)
+					r.Immutable = new(false)
 				}
 				if skipped == "prerelease" {
-					r.Prerelease = github.Ptr(true)
+					r.Prerelease = true
 				}
 			})
 			candidates, err := client.Candidates(t.Context(), sampleSubmission().Source())

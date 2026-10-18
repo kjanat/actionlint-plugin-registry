@@ -15,7 +15,7 @@ import (
 	"time"
 
 	ghapi "github.com/cli/go-gh/v2/pkg/api"
-	"github.com/google/go-github/v83/github"
+	"github.com/google/go-github/v93/github"
 )
 
 const GitHubAPIVersion = "2026-03-10"
@@ -41,7 +41,11 @@ func newGitHub(token string, transport http.RoundTripper) (*GitHub, error) {
 	if err != nil {
 		return nil, fmt.Errorf("GitHub client: %w", err)
 	}
-	return &GitHub{api: github.NewClient(client), download: &http.Client{Timeout: 60 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+	apiClient, err := github.NewClient(github.WithHTTPClient(client))
+	if err != nil {
+		return nil, fmt.Errorf("GitHub API client: %w", err)
+	}
+	return &GitHub{api: apiClient, download: &http.Client{Timeout: 60 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
 		if len(via) > 5 {
 			return errors.New("too many asset redirects")
 		}
@@ -196,5 +200,5 @@ func (g *GitHub) DownloadRelease(ctx context.Context, s Submission, r Release, p
 	if err != nil {
 		return err
 	}
-	return g.Download(ctx, s, &github.ReleaseAsset{Size: github.Ptr(size), BrowserDownloadURL: github.Ptr(r.DownloadURL)}, path)
+	return g.Download(ctx, s, &github.ReleaseAsset{Size: new(size), BrowserDownloadURL: new(r.DownloadURL)}, path)
 }

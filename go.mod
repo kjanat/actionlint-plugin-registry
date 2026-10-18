@@ -7,7 +7,6 @@ toolchain go1.27.2
 require (
 	actionlint.kjanat.dev v1.17.1-0.20261018164101-abe9f897d9d8
 	github.com/cli/go-gh/v2 v2.16.2
-	github.com/google/go-github/v83 v83.0.0
 	github.com/google/go-github/v93 v93.0.0
 )
 
