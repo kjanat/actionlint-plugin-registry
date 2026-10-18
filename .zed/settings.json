@@ -46,6 +46,49 @@
         "env": {},
       }
     },
+    "gopls": {
+      "binary": {
+        "path": "go",
+        "arguments": ["run", "golang.org/x/tools/gopls@latest"],
+        "env": { "MISE_SILENT": "1" },
+      },
+      "initialization_options": {
+        "buildFlags": ["-buildvcs=true"],
+        "local": "registry.actionlint.kjanat.dev",
+        "gofumpt": true,
+        "staticcheck": true,
+        "usePlaceholders": true,
+        "vulncheck": "Imports",
+        "hints": {
+          "ignoredError": true,
+          "parameterNames": true,
+          "constantValues": true,
+          "functionTypeParameters": true,
+        },
+        "hoverKind": "SynopsisDocumentation"
+      }
+    },
+    "golangci-lint": {
+      "binary": {
+        "env": {}
+      },
+      "initialization_options": {
+        "command": [
+          "mise",
+          "exec",
+          "--silent",
+          "golangci-lint@latest",
+          "--",
+          "golangci-lint",
+          "run",
+          "--output.json.path",
+          "stdout",
+          "--show-stats=false",
+          "--output.text.path=",
+          "--issues-exit-code=1"
+        ]
+      }
+    },
     "biome": {
       "binary": {
         "path": "mise",
