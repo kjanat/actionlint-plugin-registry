@@ -37,6 +37,13 @@ type Declaration struct {
 	Metadata      json.RawMessage `json:"metadata"`
 }
 
+// InvalidError identifies invalid bytes after a successful local read. I/O and
+// cancellation failures remain retryable; they do not establish invalid content.
+type InvalidError struct{ cause error }
+
+func (e *InvalidError) Error() string { return e.cause.Error() }
+func (e *InvalidError) Unwrap() error { return e.cause }
+
 type metadata struct {
 	Version       int    `json:"metadata_version"`
 	ID            string `json:"id"`
@@ -156,6 +163,11 @@ func Inspect(ctx context.Context, path string) (result Declaration, err error) {
 	if err = errors.Join(readErr, f.Close()); err != nil {
 		return result, err
 	}
+	defer func() {
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) {
+			err = &InvalidError{cause: err}
+		}
+	}()
 	if len(raw) > MaxDownload {
 		return result, errors.New("artifact exceeds 64 MiB")
 	}

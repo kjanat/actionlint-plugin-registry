@@ -11,9 +11,17 @@ ORIGIN = "https://registry.actionlint.kjanat.dev"
 MAX_RESPONSE = 1024 * 1024
 
 
+class RequestError(ValueError):
+    """A credential-free request failure safe to display to workflow operators."""
+
+
+def failure_message(error, fallback):
+    return str(error) if isinstance(error, RequestError) else fallback
+
+
 class NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
-        raise ValueError("authenticated HTTP redirects are forbidden")
+        raise RequestError("Authenticated HTTP redirects are forbidden.")
 
 
 def json_object(pairs):
@@ -25,7 +33,16 @@ def json_object(pairs):
     return result
 
 
-def request_json(url, token, payload=None):
+def request_json(url, token, payload=None, *, operation=None):
+    try:
+        return _request_json(url, token, payload)
+    except RequestError as error:
+        if operation is None:
+            raise
+        raise RequestError(f"{operation}: {error}") from None
+
+
+def _request_json(url, token, payload):
     parsed = urllib.parse.urlsplit(url)
     if (
         parsed.scheme != "https"
@@ -56,19 +73,22 @@ def request_json(url, token, payload=None):
             request, timeout=30
         ) as response:
             if response.status < 200 or response.status >= 300:
-                raise ValueError("unexpected HTTP response status")
+                raise RequestError("The HTTPS endpoint returned an unexpected status.")
             body = response.read(MAX_RESPONSE + 1)
     except urllib.error.HTTPError as error:
         status = error.code
         error.close()
-        raise ValueError(f"HTTP request failed with status {status}") from None
+        raise RequestError(f"HTTP request failed with status {status}") from None
     except (urllib.error.URLError, TimeoutError, OSError):
-        raise ValueError("HTTPS request failed") from None
+        raise RequestError("HTTPS request failed") from None
     if len(body) > MAX_RESPONSE:
-        raise ValueError("HTTP response exceeds limit")
-    result = json.loads(body, object_pairs_hook=json_object)
+        raise RequestError("HTTP response exceeds limit")
+    try:
+        result = json.loads(body, object_pairs_hook=json_object)
+    except (ValueError, UnicodeError):
+        raise RequestError("The HTTPS endpoint returned invalid JSON.") from None
     if not isinstance(result, dict):
-        raise TypeError("HTTP response must be a JSON object")
+        raise RequestError("HTTP response must be a JSON object")
     return result
 
 
@@ -82,19 +102,27 @@ def oidc_token(audience, environ, provider="github"):
         token = environ.get("REGISTRY_ID_TOKEN", "")
     elif provider == "github":
         endpoint = environ.get("ACTIONS_ID_TOKEN_REQUEST_URL", "")
-        parsed = urllib.parse.urlsplit(endpoint)
+        if not endpoint:
+            raise RequestError(
+                "The GitHub OIDC endpoint is missing. Grant the job id-token: write permission."
+            )
+        try:
+            parsed = urllib.parse.urlsplit(endpoint)
+            port = parsed.port
+        except ValueError:
+            raise RequestError(
+                "The GitHub OIDC endpoint is invalid or unsupported."
+            ) from None
         if (
             parsed.scheme != "https"
             or not parsed.hostname
             or not parsed.hostname.endswith(".actions.githubusercontent.com")
-            or parsed.port not in (None, 443)
+            or port not in (None, 443)
             or parsed.username
             or parsed.password
             or parsed.fragment
         ):
-            raise ValueError(
-                "The GitHub OIDC endpoint is unavailable. Grant the job id-token: write permission."
-            )
+            raise RequestError("The GitHub OIDC endpoint is invalid or unsupported.")
         query = [
             (key, value)
             for key, value in urllib.parse.parse_qsl(parsed.query)
@@ -106,9 +134,11 @@ def oidc_token(audience, environ, provider="github"):
         )
         request_token = environ.get("ACTIONS_ID_TOKEN_REQUEST_TOKEN", "")
         if re.fullmatch(r"[A-Za-z0-9._~+/-]+=*", request_token) is None:
-            raise ValueError("GitHub OIDC request credential unavailable")
+            raise RequestError("GitHub OIDC request credential unavailable")
         mask(request_token, environ)
-        token = request_json(endpoint, request_token).get("value")
+        token = request_json(
+            endpoint, request_token, operation="GitHub OIDC token request"
+        ).get("value")
     else:
         raise ValueError("unsupported identity provider")
     if (
@@ -117,7 +147,7 @@ def oidc_token(audience, environ, provider="github"):
         is None
         or len(token) > 16384
     ):
-        raise ValueError("OIDC provider returned an invalid token")
+        raise RequestError("OIDC provider returned an invalid token")
     mask(token, environ)
     return token
 

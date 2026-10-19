@@ -126,6 +126,7 @@ func run(ctx context.Context, args []string) error {
 		}
 		service := registry.Service{Providers: providers}
 		report := registry.NewReport("admit")
+		report.SubmissionID = receipt.ID
 		entry, admissionErr := service.Admit(ctx, &index, receipt)
 		if admissionErr == nil {
 			delta := registry.EmptyIndex()
@@ -137,7 +138,7 @@ func run(ctx context.Context, args []string) error {
 		if admissionErr == nil {
 			report.Accepted = append(report.Accepted, entry)
 		} else {
-			report.Rejected = append(report.Rejected, registry.Failure{Repository: receipt.Submission.Repository, Tag: receipt.Submission.Tag, Error: admissionErr.Error()})
+			report.Rejected = append(report.Rejected, registry.Failure{Repository: receipt.Submission.Repository, Tag: receipt.Submission.Tag, Error: admissionErr.Error(), Disposition: registry.FailureDisposition(admissionErr)})
 		}
 		if *reportPath != "" {
 			if err = registry.WriteJSON(*reportPath, report); err != nil {

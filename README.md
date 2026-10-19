@@ -122,10 +122,14 @@ remain stored until a workflow processes them.
 Opening an issue or adding a repository to the discovery list does not authorize
 publication. Running the workflow manually processes existing authorized requests.
 
-Use `GET /v1/submissions/<submission-id>` to check a request's status. If a workflow
-fails, its claim expires and the request can be retried. After three expired
-attempts, the request becomes `failed`. There is no administrative recovery command
-yet. Retrying a request cannot replace an accepted version with different bytes.
+Use `GET /v1/submissions/<submission-id>` to check a request's status. Proven invalid
+artifact content or identity is rejected immediately. Infrastructure and upstream
+failures leave the claim eligible for retry. After three expired attempts, the
+request becomes `failed`. The publisher can retry that failed request by submitting
+identical metadata with a fresh OIDC token; the original receipt is preserved and
+the recovery is recorded. Rejected and published requests remain terminal. Failure
+statuses include a safe explanation and a link to the validator run. Retrying cannot
+replace an accepted version with different bytes.
 The [Worker documentation](worker/README.md) explains authentication, quotas, and
 how claims expire.
 

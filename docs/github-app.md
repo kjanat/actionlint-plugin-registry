@@ -27,7 +27,9 @@ either permission, so keep them out of jobs that execute publisher plugins.
 ## Configure the deployment
 
 The App registration is available in [the owner's GitHub settings](https://github.com/settings/apps/actionlint-plugin-registry).
-Its App ID is `5371610`, and its client ID is `Iv23lighv9xlr7gdPEKj`.
+Its App ID is `5371610`, its client ID is `Iv23lighv9xlr7gdPEKj`, and the registry
+repository's installation ID is `172822417`. The installation ID is tracked in
+`worker/wrangler.jsonc`; replacing the installation requires updating that value.
 These identifiers are public configuration values, not credentials.
 
 Generate separate private keys for the Worker and the publication workflow so

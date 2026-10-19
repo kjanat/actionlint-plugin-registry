@@ -23,6 +23,10 @@ CREATE TABLE IF NOT EXISTS dispatch_outbox (
  attempts INTEGER NOT NULL DEFAULT 0, expires INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS dispatch_due ON dispatch_outbox(next_attempt);
+CREATE TABLE IF NOT EXISTS submission_recoveries (
+ id INTEGER PRIMARY KEY, submission_id TEXT NOT NULL, recovered_at INTEGER NOT NULL,
+ publisher_identity TEXT NOT NULL, previous_lease_owner TEXT
+);
 `;
 
 function row(value: unknown): Record<string, unknown> {
@@ -33,11 +37,42 @@ function count(value: unknown): number {
 	if (typeof n !== 'number') throw new Error('The database returned an invalid count.');
 	return n;
 }
-function response(value: Record<string, unknown>): {
+interface SubmissionStatus {
 	id: string;
-	status: string;
-} {
-	return { id: text(value.id), status: text(value.status) };
+	status: 'pending' | 'validating' | 'published' | 'rejected' | 'failed';
+	detail?: string;
+	validator_run?: string;
+}
+
+function response(value: Record<string, unknown>): SubmissionStatus {
+	const status = value.status;
+	if (
+		status !== 'pending' && status !== 'validating' && status !== 'published' && status !== 'rejected'
+		&& status !== 'failed'
+	) {
+		throw new Error('The database returned an invalid submission status.');
+	}
+	const result: SubmissionStatus = { id: text(value.id), status };
+	if (status !== 'rejected' && status !== 'failed') return result;
+	// Stored detail may contain raw validator output. Public responses use only
+	// canned messages and a URL derived from the authenticated validator identity.
+	result.detail = status === 'rejected'
+		? 'The release failed admission checks. See the validator run for details.'
+		: 'The validator retry limit was reached. Resubmit identical metadata with a fresh publisher token to retry.';
+	if (typeof value.lease_owner === 'string') {
+		const owner = object(JSON.parse(value.lease_owner));
+		if (
+			owner.issuer === 'https://token.actions.githubusercontent.com'
+			&& typeof owner.repository === 'string'
+			&& /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(owner.repository)
+			&& typeof owner.run_id === 'string'
+			&& /^[1-9][0-9]*:[1-9][0-9]*$/u.test(owner.run_id)
+		) {
+			const [run, attempt] = owner.run_id.split(':');
+			result.validator_run = `https://github.com/${owner.repository}/actions/runs/${run}/attempts/${attempt}`;
+		}
+	}
+	return result;
 }
 
 /** All state transitions run in one SQLite transaction; no awaits inside a transition. */
@@ -51,7 +86,7 @@ export class InboxStore {
 		auth: Authorization,
 		hash: string,
 		now: number,
-	): { id: string; status: string } {
+	): SubmissionStatus {
 		return this.db.transaction(() => {
 			this.db.query('DELETE FROM replay WHERE expires < ?', now - 60);
 			this.db.query(
@@ -84,7 +119,7 @@ export class InboxStore {
 				return response(
 					row(
 						this.db.query(
-							'SELECT id, status FROM submissions WHERE id = ?',
+							'SELECT id, status, lease_owner FROM submissions WHERE id = ?',
 							text(prior.submission_id),
 						)[0],
 					),
@@ -100,7 +135,7 @@ export class InboxStore {
 				throw new HttpError(429, 'The publisher hourly quota has been exceeded.');
 			}
 			const previous = this.db.query(
-				'SELECT id, status, body_hash FROM submissions WHERE version_key = ?',
+				'SELECT id, status, body_hash, lease_owner FROM submissions WHERE version_key = ?',
 				version,
 			)[0];
 			if (previous !== undefined) {
@@ -109,6 +144,26 @@ export class InboxStore {
 					throw new HttpError(
 						409,
 						'This version is already bound to different submission bytes.',
+					);
+				}
+				if (prior.status === 'failed') {
+					this.checkPendingQuota(publisher);
+					this.db.query(
+						'INSERT INTO submission_recoveries (submission_id,recovered_at,publisher_identity,previous_lease_owner) VALUES (?,?,?,?)',
+						text(prior.id),
+						now,
+						JSON.stringify(auth.identity),
+						prior.lease_owner === null ? null : text(prior.lease_owner),
+					);
+					this.db.query(
+						"UPDATE submissions SET status='pending',attempts=0,lease_id=NULL,lease_owner=NULL,lease_until=NULL,detail=NULL WHERE id=?",
+						text(prior.id),
+					);
+					this.db.query(
+						'INSERT INTO dispatch_outbox (submission_id,next_attempt,expires) VALUES (?,?,?) ON CONFLICT(submission_id) DO UPDATE SET next_attempt=excluded.next_attempt,attempts=0,expires=excluded.expires',
+						text(prior.id),
+						now,
+						now + 3600,
 					);
 				}
 				this.db.query(
@@ -123,23 +178,9 @@ export class InboxStore {
 					publisher,
 					hour,
 				);
-				return response(prior);
+				return this.status(text(prior.id));
 			}
-			if (
-				count(
-						this.db.query(
-							"SELECT count(*) AS n FROM submissions WHERE publisher = ? AND status IN ('pending', 'validating')",
-							publisher,
-						)[0],
-					) >= 10
-				|| count(
-						this.db.query(
-							"SELECT count(*) AS n FROM submissions WHERE status IN ('pending', 'validating')",
-						)[0],
-					) >= 1000
-			) {
-				throw new HttpError(429, 'The inbox pending quota has been exceeded.');
-			}
+			this.checkPendingQuota(publisher);
 			const id = crypto.randomUUID();
 			const receipt: Receipt = {
 				schema_version: 1,
@@ -177,6 +218,24 @@ export class InboxStore {
 			);
 			return { id, status: 'pending' };
 		});
+	}
+
+	private checkPendingQuota(publisher: string): void {
+		if (
+			count(
+					this.db.query(
+						"SELECT count(*) AS n FROM submissions WHERE publisher = ? AND status IN ('pending', 'validating')",
+						publisher,
+					)[0],
+				) >= 10
+			|| count(
+					this.db.query(
+						"SELECT count(*) AS n FROM submissions WHERE status IN ('pending', 'validating')",
+					)[0],
+				) >= 1000
+		) {
+			throw new HttpError(429, 'The inbox pending quota has been exceeded.');
+		}
 	}
 
 	claim(
@@ -219,7 +278,7 @@ export class InboxStore {
 		status: 'published' | 'rejected',
 		detail: string | undefined,
 		now: number,
-	): { id: string; status: string } {
+	): SubmissionStatus {
 		return this.db.transaction(() => {
 			const found = this.db.query(
 				'SELECT id,status,lease_id,lease_owner,lease_until FROM submissions WHERE id=?',
@@ -247,13 +306,13 @@ export class InboxStore {
 				detail ?? null,
 				id,
 			);
-			return { id, status };
+			return this.status(id);
 		});
 	}
 
-	status(id: string): { id: string; status: string } {
+	status(id: string): SubmissionStatus {
 		const found = this.db.query(
-			'SELECT id,status FROM submissions WHERE id=?',
+			'SELECT id,status,lease_owner FROM submissions WHERE id=?',
 			id,
 		)[0];
 		if (found === undefined) throw new HttpError(404, 'The requested submission does not exist.');

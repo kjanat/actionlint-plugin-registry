@@ -4,7 +4,15 @@ import os
 import re
 import sys
 
-from registry_api import ORIGIN, oidc_token, output, request_json, uuid_value
+from registry_api import (
+    ORIGIN,
+    RequestError,
+    failure_message,
+    oidc_token,
+    output,
+    request_json,
+    uuid_value,
+)
 
 
 def submission(environ):
@@ -52,16 +60,28 @@ def submission(environ):
 def main():
     entry = submission(os.environ)
     token = oidc_token(ORIGIN, os.environ, entry["provider"])
-    response = request_json(ORIGIN + "/v1/submissions", token, entry)
+    response = request_json(
+        ORIGIN + "/v1/submissions", token, entry, operation="Registry submission"
+    )
     identifier = uuid_value(response.get("id"))
+    status = response.get("status")
+    if status not in ("pending", "validating", "published", "rejected", "failed"):
+        raise ValueError("unexpected submission status")
     output("submission-id", identifier)
-    print("The registry queued submission " + identifier + " for validation.")
+    output("submission-status", status)
+    print(f"Registry submission {identifier}: {status}.")
+    print("Check status: " + ORIGIN + "/v1/submissions/" + identifier)
+    if status in ("rejected", "failed"):
+        raise RequestError(f"Registry submission {identifier} is {status}.")
 
 
 if __name__ == "__main__":
     try:
         main()
-    except (ValueError, TypeError, KeyError, OSError):
+    except (ValueError, TypeError, KeyError, OSError) as error:
         sys.exit(
-            "The submission failed. Check the release metadata, OIDC permissions, and registry availability."
+            failure_message(
+                error,
+                "The submission failed. Check the release metadata, OIDC permissions, and registry availability.",
+            )
         )

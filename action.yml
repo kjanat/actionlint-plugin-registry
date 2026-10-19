@@ -21,6 +21,9 @@ outputs:
   submission-id:
     description: Use this identifier to check the submission status while validation runs.
     value: ${{ steps.submit.outputs.submission-id }}
+  submission-status:
+    description: The current submission state; pending and validating are not yet published.
+    value: ${{ steps.submit.outputs.submission-status }}
 runs:
   using: composite
   steps:

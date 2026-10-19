@@ -8,6 +8,7 @@ from pathlib import Path
 
 from registry_api import (
     ORIGIN,
+    failure_message,
     json_object,
     oidc_token,
     output,
@@ -29,7 +30,9 @@ def read_object(path):
 
 def claim(directory):
     token = oidc_token(ORIGIN + "/validator", os.environ)
-    response = request_json(ORIGIN + "/v1/claims", token, {})
+    response = request_json(
+        ORIGIN + "/v1/claims", token, {}, operation="Registry claim"
+    )
     if set(response) != {"claim"}:
         raise ValueError("unexpected claim response")
     item = response["claim"]
@@ -67,9 +70,34 @@ def complete(lease_path, status):
         ORIGIN + "/v1/claims/" + identifier + "/complete",
         token,
         {"lease_id": lease_id, "status": status},
+        operation="Registry completion",
     )
     if result.get("id") != identifier or result.get("status") != status:
         raise ValueError("unexpected completion response")
+
+
+def reject(lease_path, report_path):
+    lease = read_object(lease_path)
+    identifier = uuid_value(lease.get("id"))
+    report = read_object(report_path)
+    failures = report.get("rejected")
+    if (
+        report.get("schema_version") != 1
+        or report.get("mode") != "admit"
+        or report.get("submission_id") != identifier
+        or report.get("accepted") != []
+        or not isinstance(failures, list)
+        or len(failures) != 1
+        or not isinstance(failures[0], dict)
+    ):
+        raise ValueError("invalid admission failure report")
+    disposition = failures[0].get("disposition")
+    if disposition == "retryable":
+        print("Admission could not finish. The lease remains eligible for retry.")
+    elif disposition == "rejected":
+        complete(lease_path, "rejected")
+    else:
+        raise ValueError("unknown admission failure disposition")
 
 
 def main():
@@ -82,17 +110,25 @@ def main():
     complete_parser.add_argument(
         "--status", choices=("published", "rejected"), required=True
     )
+    reject_parser = sub.add_parser("reject")
+    reject_parser.add_argument("--lease", type=Path, required=True)
+    reject_parser.add_argument("--report", type=Path, required=True)
     arguments = parser.parse_args()
     if arguments.command == "claim":
         claim(arguments.directory)
-    else:
+    elif arguments.command == "complete":
         complete(arguments.lease, arguments.status)
+    else:
+        reject(arguments.lease, arguments.report)
 
 
 if __name__ == "__main__":
     try:
         main()
-    except (ValueError, TypeError, KeyError, OSError):
+    except (ValueError, TypeError, KeyError, OSError) as error:
         sys.exit(
-            "The registry request failed. Any unfinished claim will become eligible for retry when its lease expires."
+            failure_message(
+                error,
+                "The registry request failed. Any unfinished claim will become eligible for retry when its lease expires.",
+            )
         )

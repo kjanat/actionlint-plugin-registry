@@ -16,17 +16,37 @@ import (
 type Inspector func(context.Context, string) (artifact.Declaration, error)
 
 type Failure struct {
-	Repository string `json:"repository"`
-	Tag        string `json:"tag,omitempty"`
-	Error      string `json:"error"`
+	Repository  string `json:"repository"`
+	Tag         string `json:"tag,omitempty"`
+	Error       string `json:"error"`
+	Disposition string `json:"disposition"`
 }
 
 type Report struct {
 	SchemaVersion int       `json:"schema_version"`
 	Mode          string    `json:"mode"`
+	SubmissionID  string    `json:"submission_id,omitempty"`
 	Accepted      []Entry   `json:"accepted"`
 	Rejected      []Failure `json:"rejected"`
 	NoCandidates  []string  `json:"no_candidates,omitempty"`
+}
+
+type rejection struct{ message string }
+
+func (e *rejection) Error() string { return e.message }
+
+func reject(message string) error { return &rejection{message: message} }
+
+// FailureDisposition defaults unknown, upstream, storage and transport failures
+// to retryable. Only evidence that establishes invalid content or identity can
+// permanently reject a submission.
+func FailureDisposition(err error) string {
+	var denied *rejection
+	var invalid *artifact.InvalidError
+	if errors.As(err, &denied) || errors.As(err, &invalid) {
+		return "rejected"
+	}
+	return "retryable"
 }
 
 func NewReport(mode string) Report {
@@ -56,18 +76,18 @@ func (service Service) Admit(ctx context.Context, index *Index, receipt Receipt)
 	entry := release.Entry
 	entry.Receipt = receipt
 	if strconv.FormatInt(entry.RepositoryID, 10) != receipt.Identity.RepositoryID || strconv.FormatInt(entry.OwnerID, 10) != receipt.Identity.OwnerID || entry.Commit != receipt.Identity.Commit {
-		return Entry{}, errors.New("release identity or commit disagrees with OIDC publisher")
+		return Entry{}, reject("release identity or commit disagrees with OIDC publisher")
 	}
 	for _, old := range index.Entries {
 		if old.Receipt.PluginKey() != receipt.PluginKey() && (old.Submission.Provider != s.Provider || !strings.EqualFold(old.Submission.Repository, s.Repository)) {
 			continue
 		}
 		if old.Receipt.PluginKey() != receipt.PluginKey() || old.OwnerID != entry.OwnerID || old.Submission.Asset != s.Asset || old.Submission.Kind != s.Kind {
-			return Entry{}, errors.New("registered publisher or artifact identity changed")
+			return Entry{}, reject("registered publisher or artifact identity changed")
 		}
 		if old.Submission.Tag == s.Tag {
 			if old.Submission != s || old.ReleaseID != entry.ReleaseID || old.AssetID != entry.AssetID || old.Commit != entry.Commit || old.URL != entry.URL {
-				return Entry{}, errors.New("accepted version is immutable")
+				return Entry{}, reject("accepted version is immutable")
 			}
 			return old, nil
 		}
@@ -92,11 +112,11 @@ func (service Service) Admit(ctx context.Context, index *Index, receipt Receipt)
 		return Entry{}, fmt.Errorf("plugin inspection: %w", err)
 	}
 	if declaration.Kind != s.Kind {
-		return Entry{}, errors.New("binary kind disagrees with submission")
+		return Entry{}, reject("binary kind disagrees with submission")
 	}
 	expectedRepository := "https://" + s.Provider + ".com/" + s.Repository
 	if !strings.EqualFold(declaration.Repository, expectedRepository) || strings.TrimPrefix(declaration.PluginVersion, "v") != strings.TrimPrefix(s.Tag, "v") {
-		return Entry{}, errors.New("embedded repository or version disagrees with authenticated release")
+		return Entry{}, reject("embedded repository or version disagrees with authenticated release")
 	}
 	entry.RecordVersion = 2
 	entry.Artifact = &declaration

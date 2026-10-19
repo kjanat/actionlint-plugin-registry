@@ -86,9 +86,12 @@ To complete a claim, send `POST /v1/claims/<id>/complete` with
 The response contains the submission ID and its resulting status, for example
 `{"id":"UUID","status":"published"}`. The request must use the current lease
 and the identity that claimed it. Repeating the same completion request has no
-additional effect. The public status endpoint does not expose `detail`.
+additional effect. Stored validator `detail` is private; public explanations use
+fixed messages and never copy raw validator output.
 
-The public endpoint `GET /v1/submissions/<id>` returns only `id` and `status`.
+The public endpoint `GET /v1/submissions/<id>` returns `id` and `status`. A rejected
+or failed request also includes a safe `detail` and, when available, a
+`validator_run` URL derived from its authenticated validator identity.
 The possible statuses are `pending`, `validating`, `published`, `rejected`, and
 `failed`. The health endpoint `GET /health` returns `{"status":"ok"}`. Responses
 disable caching. The API does not enable CORS for browser-based publication clients.
@@ -111,19 +114,25 @@ Token replay records expire, and hourly rate-limit records are removed after
 Each new submission also creates a dispatch notification in the same transaction.
 The Worker saves a Durable Object alarm before accepting the submission, then uses
 that alarm to notify GitHub. Failed notifications are retried at increasing intervals,
-up to five attempts or one hour. Repeating a submission does not create another
-notification or reset its retry schedule. Claiming a request removes its pending
+up to five attempts or one hour. Repeating a pending, active, rejected, or published
+submission does not create another notification or reset its retry schedule. Claiming a request removes its pending
 notification. Scheduled workflow runs remain available if dispatch fails.
 
 When the registry workflow claims a request, it receives a lease lasting sixty
 minutes. If the lease expires before completion, a later poll can claim the request
 again. After three expired attempts, the next poll marks the request `failed`.
-The current workflow lets failed jobs expire so that infrastructure failures can
-be retried. It does not yet report validation failures as `rejected`.
+Infrastructure, upstream availability, and unclassified failures leave the lease
+eligible for retry. The admission report marks proven invalid artifact bytes or
+identity as a deterministic rejection. The workflow completes those requests as
+`rejected` immediately, using a report bound to the claimed submission ID.
 
-Completed or failed requests cannot be reopened by submitting them again, and there
-is no administrative recovery command yet. Publishing different bytes requires a
-new tag. If scheduled workflows stop running, both validation and expiry processing
+Rejected and published requests cannot be reopened. A publisher can recover a
+`failed` request by submitting identical metadata with a fresh OIDC token. This
+preserves the original receipt, records the recovery and prior validator identity,
+clears the obsolete lease, resets the three-attempt budget, and adds a durable
+dispatch notification. Recovery respects the same hourly and pending quotas; token
+replay cannot trigger it. Publishing different bytes requires a new tag.
+If scheduled workflows stop running, both validation and expiry processing
 are delayed. A delayed job may finish after its lease expires; its completion
 request then fails. The next attempt must handle any records already published
 without changing them. Only a workflow with an authenticated claim can publish a

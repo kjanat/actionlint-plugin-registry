@@ -61,7 +61,8 @@ class SubmissionTests(unittest.TestCase):
                 ),
                 patch("submit.oidc_token", return_value=TOKEN) as token,
                 patch(
-                    "submit.request_json", return_value={"id": IDENTIFIER}
+                    "submit.request_json",
+                    return_value={"id": IDENTIFIER, "status": "pending"},
                 ) as request,
                 patch("builtins.print"),
             ):
@@ -72,7 +73,43 @@ class SubmissionTests(unittest.TestCase):
                 request.call_args.args[0], registry_api.ORIGIN + "/v1/submissions"
             )
             self.assertEqual(request.call_args.args[2]["provider"], "github")
-            self.assertEqual(output.read_text(), f"submission-id={IDENTIFIER}\n")
+            self.assertEqual(
+                output.read_text(),
+                f"submission-id={IDENTIFIER}\nsubmission-status=pending\n",
+            )
+
+    def test_submission_reports_actual_state_and_terminal_failures(self):
+        for status in ("pending", "validating", "published", "rejected", "failed"):
+            with (
+                self.subTest(status=status),
+                patch.dict(os.environ, self.environ, clear=True),
+                patch("submit.oidc_token", return_value=TOKEN),
+                patch(
+                    "submit.request_json",
+                    return_value={"id": IDENTIFIER, "status": status},
+                ),
+                patch("submit.output") as output,
+                patch("builtins.print") as log,
+            ):
+                if status in ("rejected", "failed"):
+                    with self.assertRaisesRegex(registry_api.RequestError, status):
+                        submit.main()
+                else:
+                    submit.main()
+                output.assert_any_call("submission-status", status)
+                log.assert_any_call(f"Registry submission {IDENTIFIER}: {status}.")
+                self.assertNotIn("queued", str(log.call_args_list))
+
+    def test_unknown_submission_status_fails_without_outputs(self):
+        with (
+            patch.dict(os.environ, self.environ, clear=True),
+            patch("submit.oidc_token", return_value=TOKEN),
+            patch("submit.request_json", return_value={"id": IDENTIFIER}),
+            patch("submit.output") as output,
+            self.assertRaises(ValueError),
+        ):
+            submit.main()
+        output.assert_not_called()
 
     def test_output_command_injection_rejected(self):
         with (
@@ -126,6 +163,30 @@ class HTTPTests(unittest.TestCase):
                 registry_api.request_json(registry_api.ORIGIN, TOKEN, {})
         self.assertNotIn(TOKEN, str(caught.exception))
         self.assertEqual(str(caught.exception), "HTTP request failed with status 403")
+
+    def test_failure_output_keeps_safe_operation_status_only(self):
+        for operation in ("GitHub OIDC token request", "Registry claim"):
+            error = urllib.error.HTTPError(
+                "https://example.test/" + TOKEN,
+                403,
+                TOKEN,
+                {},
+                io.BytesIO(TOKEN.encode()),
+            )
+            with patch("registry_api.urllib.request.build_opener") as opener:
+                opener.return_value.open.side_effect = error
+                with self.assertRaises(registry_api.RequestError) as caught:
+                    registry_api.request_json(
+                        registry_api.ORIGIN, TOKEN, {}, operation=operation
+                    )
+            self.assertEqual(
+                registry_api.failure_message(caught.exception, "fallback"),
+                f"{operation}: HTTP request failed with status 403",
+            )
+        for error in (OSError(TOKEN), ValueError(TOKEN), KeyError(TOKEN)):
+            self.assertEqual(
+                registry_api.failure_message(error, "fallback"), "fallback"
+            )
 
     def test_insecure_endpoint_rejected_before_network(self):
         for url in (
@@ -186,8 +247,99 @@ class HTTPTests(unittest.TestCase):
             )
         request.assert_not_called()
 
+    def test_oidc_endpoint_diagnostics_distinguish_missing_and_invalid_without_echo(
+        self,
+    ):
+        for endpoint, expected in (
+            ("", "missing"),
+            ("https://evil.test/" + TOKEN, "invalid or unsupported"),
+            (
+                "https://run.actions.githubusercontent.com:bad/" + TOKEN,
+                "invalid or unsupported",
+            ),
+        ):
+            with (
+                self.subTest(endpoint=endpoint),
+                self.assertRaises(registry_api.RequestError) as caught,
+            ):
+                registry_api.oidc_token(
+                    registry_api.ORIGIN, {"ACTIONS_ID_TOKEN_REQUEST_URL": endpoint}
+                )
+            self.assertIn(expected, str(caught.exception))
+            self.assertNotIn(TOKEN, str(caught.exception))
+
 
 class ConsumerTests(unittest.TestCase):
+    def test_only_explicit_matching_deterministic_failure_completes_rejection(self):
+        for disposition in ("rejected", "retryable", "unknown", None):
+            with (
+                self.subTest(disposition=disposition),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                target = Path(directory)
+                lease = target / "lease.json"
+                report = target / "report.json"
+                lease.write_text(json.dumps({"id": IDENTIFIER, "lease_id": IDENTIFIER}))
+                report.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": 1,
+                            "mode": "admit",
+                            "submission_id": IDENTIFIER,
+                            "accepted": [],
+                            "rejected": [{"disposition": disposition, "error": TOKEN}],
+                        }
+                    )
+                )
+                with (
+                    patch("consume.complete") as complete,
+                    patch("builtins.print") as log,
+                ):
+                    if disposition in ("rejected", "retryable"):
+                        consume.reject(lease, report)
+                    else:
+                        with self.assertRaises(ValueError):
+                            consume.reject(lease, report)
+                    if disposition == "rejected":
+                        complete.assert_called_once_with(lease, "rejected")
+                    else:
+                        complete.assert_not_called()
+                    self.assertNotIn(TOKEN, str(log.call_args_list))
+
+    def test_failure_report_cannot_complete_another_submission_or_partial_success(self):
+        for change in (
+            {"submission_id": "00000000-0000-4000-8000-000000000001"},
+            {"accepted": [{}]},
+            {"rejected": []},
+            {"schema_version": 2},
+        ):
+            with (
+                self.subTest(change=change),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                target = Path(directory)
+                lease = target / "lease.json"
+                report = target / "report.json"
+                lease.write_text(json.dumps({"id": IDENTIFIER, "lease_id": IDENTIFIER}))
+                report.write_text(
+                    json.dumps(
+                        {
+                            "schema_version": 1,
+                            "mode": "admit",
+                            "submission_id": IDENTIFIER,
+                            "accepted": [],
+                            "rejected": [{"disposition": "rejected"}],
+                        }
+                        | change
+                    )
+                )
+                with (
+                    patch("consume.complete") as complete,
+                    self.assertRaises(ValueError),
+                ):
+                    consume.reject(lease, report)
+                complete.assert_not_called()
+
     def test_empty_queue_writes_no_receipt(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "handoff"

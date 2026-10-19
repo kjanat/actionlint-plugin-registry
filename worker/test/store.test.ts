@@ -9,8 +9,7 @@ const open: Database[] = [];
 afterEach(() => {
 	for (const db of open.splice(0)) db.close();
 });
-function store(): InboxStore {
-	const db = new Database(':memory:');
+function store(db = new Database(':memory:')): InboxStore {
 	open.push(db);
 	return new InboxStore({
 		query: (sql, ...bindings) => {
@@ -128,6 +127,70 @@ test('expired lease cannot complete; three expired attempts terminate', () => {
 	expect(inbox.claim(identity, 7300).claim).not.toBeNull();
 	expect(inbox.claim(identity, 10900).claim).toBeNull();
 	expect(inbox.status(accepted.id).status).toBe('failed');
+});
+
+test('fresh publisher authorization recovers identical failed submissions with a new lease and durable wakeup', () => {
+	const db = new Database(':memory:');
+	const inbox = store(db);
+	const authorization = { ...auth, expires: 20000 };
+	const accepted = inbox.submit(s, authorization, 'hash', 100);
+	const first = inbox.claim(identity, 100).claim;
+	if (!first) throw new Error('missing claim');
+	inbox.claim(identity, 3700);
+	inbox.claim(identity, 7300);
+	inbox.claim(identity, 10900);
+	expect(inbox.status(accepted.id)).toEqual({
+		id: accepted.id,
+		status: 'failed',
+		detail: 'The validator retry limit was reached. Resubmit identical metadata with a fresh publisher token to retry.',
+		validator_run: 'https://github.com/acme/plugin/actions/runs/30/attempts/1',
+	});
+	expect(inbox.submit(s, authorization, 'hash', 10901).status).toBe('failed');
+	expect(() => inbox.submit({ ...s, sha256: 'b'.repeat(64) }, { ...authorization, jti: 'new' }, 'changed', 10901))
+		.toThrow('version is already bound');
+	const recovered = inbox.submit(s, { ...authorization, jti: 'new' }, 'hash', 10901);
+	expect(recovered).toEqual({ id: accepted.id, status: 'pending' });
+	expect(db.query('SELECT submission_id FROM dispatch_outbox').all()).toEqual([{ submission_id: accepted.id }]);
+	expect(db.query('SELECT submission_id FROM submission_recoveries').all()).toEqual([{ submission_id: accepted.id }]);
+	expect(() => inbox.complete(accepted.id, identity, first.lease_id, 'published', undefined, 10902)).toThrow(
+		'lease owner',
+	);
+	const next = inbox.claim(identity, 10902).claim;
+	if (!next) throw new Error('missing recovered claim');
+	expect(next.lease_id).not.toBe(first.lease_id);
+	expect(next.receipt).toEqual(first.receipt);
+	expect(inbox.complete(accepted.id, identity, next.lease_id, 'published', undefined, 10903).status).toBe('published');
+});
+
+test('rejection is immediate and terminal; public failure details cannot expose validator output', () => {
+	const inbox = store();
+	const accepted = inbox.submit(s, auth, 'hash', 100);
+	const claim = inbox.claim(identity, 101).claim;
+	if (!claim) throw new Error('missing claim');
+	const rejected = inbox.complete(accepted.id, identity, claim.lease_id, 'rejected', 'secret validator text', 102);
+	expect(rejected.status).toBe('rejected');
+	expect(rejected.detail).toBe('The release failed admission checks. See the validator run for details.');
+	expect(rejected.validator_run).toBe('https://github.com/acme/plugin/actions/runs/30/attempts/1');
+	expect(JSON.stringify(inbox.status(accepted.id))).not.toContain('secret validator text');
+	expect(inbox.submit(s, { ...auth, jti: 'new' }, 'hash', 103)).toEqual(rejected);
+	expect(inbox.claim(identity, 104).claim).toBeNull();
+});
+
+test('failed recovery cannot exceed pending quota or consume its token on a rejected transaction', () => {
+	const db = new Database(':memory:');
+	const inbox = store(db);
+	const accepted = inbox.submit(s, auth, 'hash', 100);
+	for (const now of [100, 3700, 7300, 10900]) inbox.claim(identity, now);
+	for (let i = 0; i < 10; i++) {
+		inbox.submit({ ...s, tag: `other${i}` }, { ...auth, jti: `other${i}` }, `other${i}`, 10901);
+	}
+	expect(() => inbox.submit(s, { ...auth, jti: 'recovery' }, 'hash', 10902)).toThrow('pending quota');
+	expect(inbox.status(accepted.id).status).toBe('failed');
+	expect(db.query('SELECT submission_id FROM submission_recoveries').all()).toEqual([]);
+	const claim = inbox.claim(identity, 10903).claim;
+	if (!claim) throw new Error('missing claim');
+	inbox.complete(text(object(claim.receipt).id), identity, claim.lease_id, 'published', undefined, 10904);
+	expect(inbox.submit(s, { ...auth, jti: 'recovery' }, 'hash', 10905).status).toBe('pending');
 });
 
 test('pending quota and fresh-token hourly quota are bounded', () => {

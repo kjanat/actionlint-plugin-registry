@@ -42,12 +42,19 @@ jobs:
         run: go build -o registry-cli ./cmd/registry
       # Admission reads metadata without executing publisher code. This job has no repository write access.
       - name: Verify authenticated release
+        id: admission
         if: steps.claim.outputs.claimed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/validate.sh ./registry-cli admit
           --receipt handoff/receipt.json
           --store candidate/plugins
+          --report reports/admission.json
+      # Deterministic rejection completes the lease; transient failures remain retryable.
+      - name: Complete rejected submission
+        if: failure() && !cancelled() && steps.claim.outputs.claimed == 'true' && steps.admission.outcome == 'failure'
+        run: python3 -B scripts/consume.py reject
+          --lease handoff/lease.json
           --report reports/admission.json
       - name: Preserve admission report
         if: always() && steps.claim.outputs.claimed == 'true'
