@@ -125,6 +125,24 @@ class SubmissionTests(unittest.TestCase):
 
 
 class HTTPTests(unittest.TestCase):
+    def test_authenticated_requests_identify_registry_client(self):
+        for endpoint in (
+            registry_api.ORIGIN + "/v1/claims",
+            "https://run.actions.githubusercontent.com/token",
+        ):
+            response = MagicMock()
+            response.status = 200
+            response.read.return_value = b"{}"
+            response.__enter__.return_value = response
+            with patch("registry_api.urllib.request.build_opener") as opener:
+                opener.return_value.open.return_value = response
+                registry_api.request_json(endpoint, TOKEN, {})
+            request = opener.return_value.open.call_args.args[0]
+            self.assertEqual(
+                request.get_header("User-agent"), "actionlint-plugin-registry/1"
+            )
+            self.assertEqual(request.get_header("Authorization"), "Bearer " + TOKEN)
+
     def test_redirects_rejected_without_forwarding_authorization(self):
         for code in (301, 302, 303, 307, 308):
             with self.subTest(code=code), self.assertRaises(ValueError):

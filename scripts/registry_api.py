@@ -100,6 +100,7 @@ def _request_json(url, token, payload):
         data=data,
         headers={
             "Authorization": "Bearer " + token,
+            "User-Agent": "actionlint-plugin-registry/1",
             "Accept": "application/json",
             "Content-Type": "application/json",
         },
