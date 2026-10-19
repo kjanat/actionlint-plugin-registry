@@ -162,7 +162,10 @@ class HTTPTests(unittest.TestCase):
             with self.assertRaises(ValueError) as caught:
                 registry_api.request_json(registry_api.ORIGIN, TOKEN, {})
         self.assertNotIn(TOKEN, str(caught.exception))
-        self.assertEqual(str(caught.exception), "HTTP request failed with status 403")
+        self.assertEqual(
+            str(caught.exception),
+            "HTTP request failed with status 403: no recognized registry error code",
+        )
 
     def test_failure_output_keeps_safe_operation_status_only(self):
         for operation in ("GitHub OIDC token request", "Registry claim"):
@@ -181,12 +184,69 @@ class HTTPTests(unittest.TestCase):
                     )
             self.assertEqual(
                 registry_api.failure_message(caught.exception, "fallback"),
-                f"{operation}: HTTP request failed with status 403",
+                f"{operation}: HTTP request failed with status 403: no recognized registry error code",
             )
         for error in (OSError(TOKEN), ValueError(TOKEN), KeyError(TOKEN)):
             self.assertEqual(
                 registry_api.failure_message(error, "fallback"), "fallback"
             )
+
+    def test_registry_error_codes_use_only_closed_local_labels(self):
+        for code, (status, label) in registry_api.REGISTRY_ERROR_CODES.items():
+            body = json.dumps({"code": code, "error": TOKEN, "claims": TOKEN}).encode()
+            error = urllib.error.HTTPError(
+                registry_api.ORIGIN, status, TOKEN, {}, io.BytesIO(body)
+            )
+            with patch("registry_api.urllib.request.build_opener") as opener:
+                opener.return_value.open.side_effect = error
+                with self.assertRaises(registry_api.RequestError) as caught:
+                    registry_api.request_json(
+                        registry_api.ORIGIN, TOKEN, operation="Registry claim"
+                    )
+            self.assertEqual(
+                str(caught.exception),
+                f"Registry claim: HTTP request failed with status {status}: {label}",
+            )
+            self.assertNotIn(TOKEN, str(caught.exception))
+
+    def test_unrecognized_error_bodies_cannot_inject_diagnostics(self):
+        for body in (
+            b"<html>edge blocked</html>",
+            json.dumps({"code": TOKEN, "error": TOKEN}).encode(),
+            json.dumps({"code": ["validator_workflow"], "error": TOKEN}).encode(),
+            b'{"code":"validator_workflow","code":"github_visibility"}',
+            json.dumps({"code": "oidc_invalid"}).encode(),
+            b'{"code":"validator_workflow","padding":"'
+            + b"x" * registry_api.MAX_ERROR_RESPONSE
+            + b'"}',
+            b"[]",
+        ):
+            error = urllib.error.HTTPError(
+                registry_api.ORIGIN, 403, TOKEN, {}, io.BytesIO(body)
+            )
+            with patch("registry_api.urllib.request.build_opener") as opener:
+                opener.return_value.open.side_effect = error
+                with self.assertRaises(registry_api.RequestError) as caught:
+                    registry_api.request_json(registry_api.ORIGIN, TOKEN)
+            self.assertEqual(
+                str(caught.exception),
+                "HTTP request failed with status 403: no recognized registry error code",
+            )
+
+    def test_registry_codes_are_ignored_for_other_endpoints(self):
+        endpoint = "https://run.actions.githubusercontent.com/token"
+        body = json.dumps({"code": "validator_workflow", "error": TOKEN}).encode()
+        error = urllib.error.HTTPError(endpoint, 403, TOKEN, {}, io.BytesIO(body))
+        with patch("registry_api.urllib.request.build_opener") as opener:
+            opener.return_value.open.side_effect = error
+            with self.assertRaises(registry_api.RequestError) as caught:
+                registry_api.request_json(
+                    endpoint, TOKEN, operation="GitHub OIDC token request"
+                )
+        self.assertEqual(
+            str(caught.exception),
+            "GitHub OIDC token request: HTTP request failed with status 403",
+        )
 
     def test_insecure_endpoint_rejected_before_network(self):
         for url in (

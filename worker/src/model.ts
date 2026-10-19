@@ -1,7 +1,28 @@
+export type AuthErrorCode =
+	| 'oidc_invalid'
+	| 'oidc_bearer_missing'
+	| 'github_issuer'
+	| 'github_visibility'
+	| 'github_subject'
+	| 'github_repository_id'
+	| 'github_owner_id'
+	| 'github_repository'
+	| 'github_ref'
+	| 'github_commit'
+	| 'github_workflow'
+	| 'github_run_id'
+	| 'github_run_attempt'
+	| 'validator_repository'
+	| 'validator_workflow'
+	| 'validator_ref'
+	| 'validator_ref_type'
+	| 'validator_event';
+
 export class HttpError extends Error {
 	constructor(
 		readonly status: number,
 		message: string,
+		readonly code?: AuthErrorCode,
 	) {
 		super(message);
 	}

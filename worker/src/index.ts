@@ -3,7 +3,7 @@ import type { Policy } from '#auth';
 import { bearer, consumer, publisher, verify } from '#auth';
 import type { GitHubAppConfig } from '#github-app';
 import { dispatchAdmission } from '#github-app';
-import { json, preflight } from '#http';
+import { errorResponse, json, preflight } from '#http';
 import { body, digest, exactKeys, HttpError, object, submission, text } from '#model';
 import { DispatchOutbox, dispatchNotification, submitWithWakeup } from '#outbox';
 import type { Database } from '#store';
@@ -111,7 +111,7 @@ export class PublicationInbox extends DurableObject<Env> {
 			throw new HttpError(404, 'The requested endpoint does not exist.');
 		} catch (error) {
 			if (error instanceof HttpError) {
-				return json({ error: error.message }, error.status);
+				return errorResponse(error);
 			}
 			return json({ error: 'The publication inbox is temporarily unavailable.' }, 503);
 		}

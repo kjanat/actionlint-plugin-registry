@@ -73,6 +73,15 @@ test('HTTP preflight denies unauthenticated writes before durable-object access'
 	).toBe(404);
 });
 
+test('preflight authorization failures include a fixed machine-readable code', async () => {
+	const response = preflight(new Request(`${policy.REGISTRY_ORIGIN}/v1/claims`, { method: 'POST' }), policy);
+	expect(response?.status).toBe(401);
+	expect(await response?.json()).toEqual({
+		error: 'Provide an OIDC token in the Authorization: Bearer header.',
+		code: 'oidc_bearer_missing',
+	});
+});
+
 test('HTTP JSON decoding enforces content type, size and valid UTF-8', async () => {
 	const url = `${policy.REGISTRY_ORIGIN}/v1/submissions`;
 	await expect(

@@ -12,6 +12,10 @@ export function json(value: unknown, status = 200): Response {
 	});
 }
 
+export function errorResponse(error: HttpError): Response {
+	return json({ error: error.message, code: error.code }, error.status);
+}
+
 /** Reject malformed routes and missing credentials before accessing the durable inbox. */
 export function preflight(
 	request: Request,
@@ -68,7 +72,7 @@ export function preflight(
 		return undefined;
 	} catch (error) {
 		if (error instanceof HttpError) {
-			return json({ error: error.message }, error.status);
+			return errorResponse(error);
 		}
 		throw error;
 	}

@@ -1,6 +1,6 @@
 import type { JWTPayload, JWTVerifyGetKey } from 'jose';
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
-import type { Authorization, Identity, Submission } from '#model';
+import type { AuthErrorCode, Authorization, Identity, Submission } from '#model';
 import { HttpError, text } from '#model';
 
 export const githubIssuer = 'https://token.actions.githubusercontent.com';
@@ -59,7 +59,7 @@ export async function verify(
 		}
 		return payload;
 	} catch {
-		throw new HttpError(401, 'The OIDC token is invalid or has expired.');
+		throw new HttpError(401, 'The OIDC token is invalid or has expired.', 'oidc_invalid');
 	}
 }
 
@@ -79,20 +79,35 @@ function commit(value: unknown): string {
 	return result;
 }
 
+function githubClaim(value: unknown, code: AuthErrorCode, limit = 512, pattern?: RegExp): string {
+	try {
+		const result = text(value, limit);
+		if (pattern === undefined || pattern.test(result)) return result;
+	} catch (error) {
+		if (!(error instanceof HttpError)) throw error;
+	}
+	throw new HttpError(403, 'A required GitHub identity claim is missing or invalid.', code);
+}
+
 function githubIdentity(p: JWTPayload): Identity {
-	if (p.iss !== githubIssuer || p.repository_visibility !== 'public') {
-		throw new HttpError(403, 'The workflow must run in a public GitHub repository.');
+	if (p.iss !== githubIssuer) {
+		throw new HttpError(403, 'The identity must come from GitHub Actions.', 'github_issuer');
+	}
+	if (p.repository_visibility !== 'public') {
+		throw new HttpError(403, 'The workflow must run in a public GitHub repository.', 'github_visibility');
 	}
 	return {
 		issuer: githubIssuer,
-		subject: text(p.sub),
-		repository_id: id(p.repository_id),
-		owner_id: id(p.repository_owner_id),
-		repository: text(p.repository, 256).toLowerCase(),
-		ref: text(p.ref),
-		commit: commit(p.sha),
-		workflow: text(p.workflow_ref),
-		run_id: `${id(p.run_id)}:${id(p.run_attempt)}`,
+		subject: githubClaim(p.sub, 'github_subject'),
+		repository_id: githubClaim(p.repository_id, 'github_repository_id', 32, /^[1-9][0-9]*$/u),
+		owner_id: githubClaim(p.repository_owner_id, 'github_owner_id', 32, /^[1-9][0-9]*$/u),
+		repository: githubClaim(p.repository, 'github_repository', 256).toLowerCase(),
+		ref: githubClaim(p.ref, 'github_ref'),
+		commit: githubClaim(p.sha, 'github_commit', 40, /^[0-9a-f]{40}$/u),
+		workflow: githubClaim(p.workflow_ref, 'github_workflow'),
+		run_id: `${githubClaim(p.run_id, 'github_run_id', 32, /^[1-9][0-9]*$/u)}:${
+			githubClaim(p.run_attempt, 'github_run_attempt', 32, /^[1-9][0-9]*$/u)
+		}`,
 	};
 }
 
@@ -176,14 +191,24 @@ export function publisher(p: JWTPayload, s: Submission): Authorization {
 
 export function consumer(p: JWTPayload, policy: Policy): Identity {
 	const identity = githubIdentity(p);
-	if (
-		identity.repository_id !== policy.REGISTRY_REPOSITORY_ID
-		|| identity.workflow !== policy.REGISTRY_WORKFLOW_REF
-		|| identity.ref !== 'refs/heads/master'
-		|| p.ref_type !== 'branch'
-		|| !['schedule', 'workflow_dispatch'].includes(text(p.event_name))
-	) {
-		throw new HttpError(403, 'Only the configured registry validation workflow can claim submissions.');
+	if (identity.repository_id !== policy.REGISTRY_REPOSITORY_ID) {
+		throw new HttpError(
+			403,
+			'The validator repository does not match the configured registry.',
+			'validator_repository',
+		);
+	}
+	if (identity.workflow !== policy.REGISTRY_WORKFLOW_REF) {
+		throw new HttpError(403, 'The validator workflow does not match the configured workflow.', 'validator_workflow');
+	}
+	if (identity.ref !== 'refs/heads/master') {
+		throw new HttpError(403, 'The validator must run on the configured master branch.', 'validator_ref');
+	}
+	if (p.ref_type !== 'branch') {
+		throw new HttpError(403, 'The validator reference type must be a branch.', 'validator_ref_type');
+	}
+	if (p.event_name !== 'schedule' && p.event_name !== 'workflow_dispatch') {
+		throw new HttpError(403, 'The validator event must be schedule or workflow_dispatch.', 'validator_event');
 	}
 	return identity;
 }
@@ -191,7 +216,7 @@ export function consumer(p: JWTPayload, policy: Policy): Identity {
 export function bearer(request: Request): string {
 	const header = request.headers.get('authorization');
 	if (!header?.startsWith('Bearer ') || header.length > 16400) {
-		throw new HttpError(401, 'Provide an OIDC token in the Authorization: Bearer header.');
+		throw new HttpError(401, 'Provide an OIDC token in the Authorization: Bearer header.', 'oidc_bearer_missing');
 	}
 	return header.slice(7);
 }

@@ -9,6 +9,28 @@ import urllib.request
 
 ORIGIN = "https://registry.actionlint.kjanat.dev"
 MAX_RESPONSE = 1024 * 1024
+MAX_ERROR_RESPONSE = 8192
+# These labels are local constants. Never display response text or claim values.
+REGISTRY_ERROR_CODES = {
+    "oidc_invalid": (401, "OIDC token invalid or expired"),
+    "oidc_bearer_missing": (401, "OIDC bearer credential missing or invalid"),
+    "github_issuer": (403, "GitHub issuer required"),
+    "github_visibility": (403, "public GitHub repository required"),
+    "github_subject": (403, "GitHub subject claim missing or invalid"),
+    "github_repository_id": (403, "GitHub repository ID claim missing or invalid"),
+    "github_owner_id": (403, "GitHub owner ID claim missing or invalid"),
+    "github_repository": (403, "GitHub repository claim missing or invalid"),
+    "github_ref": (403, "GitHub ref claim missing or invalid"),
+    "github_commit": (403, "GitHub commit claim missing or invalid"),
+    "github_workflow": (403, "GitHub workflow claim missing or invalid"),
+    "github_run_id": (403, "GitHub run ID claim missing or invalid"),
+    "github_run_attempt": (403, "GitHub run attempt claim missing or invalid"),
+    "validator_repository": (403, "validator repository ID mismatch"),
+    "validator_workflow": (403, "validator workflow reference mismatch"),
+    "validator_ref": (403, "validator branch reference mismatch"),
+    "validator_ref_type": (403, "validator reference type must be branch"),
+    "validator_event": (403, "validator event must be schedule or workflow_dispatch"),
+}
 
 
 class RequestError(ValueError):
@@ -40,6 +62,20 @@ def request_json(url, token, payload=None, *, operation=None):
         if operation is None:
             raise
         raise RequestError(f"{operation}: {error}") from None
+
+
+def registry_error_reason(error):
+    try:
+        body = error.read(MAX_ERROR_RESPONSE + 1)
+        if len(body) <= MAX_ERROR_RESPONSE:
+            value = json.loads(body, object_pairs_hook=json_object)
+            if isinstance(value, dict) and isinstance(value.get("code"), str):
+                known = REGISTRY_ERROR_CODES.get(value["code"])
+                if known is not None and known[0] == error.code:
+                    return known[1]
+    except (OSError, ValueError, TypeError, RecursionError):
+        pass
+    return "no recognized registry error code"
 
 
 def _request_json(url, token, payload):
@@ -77,8 +113,13 @@ def _request_json(url, token, payload):
             body = response.read(MAX_RESPONSE + 1)
     except urllib.error.HTTPError as error:
         status = error.code
-        error.close()
-        raise RequestError(f"HTTP request failed with status {status}") from None
+        message = f"HTTP request failed with status {status}"
+        try:
+            if parsed.netloc == urllib.parse.urlsplit(ORIGIN).netloc:
+                message += ": " + registry_error_reason(error)
+        finally:
+            error.close()
+        raise RequestError(message) from None
     except (urllib.error.URLError, TimeoutError, OSError):
         raise RequestError("HTTPS request failed") from None
     if len(body) > MAX_RESPONSE:

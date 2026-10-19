@@ -2,7 +2,9 @@ import { describe, expect, test } from 'bun:test';
 import type { JWTPayload, JWTVerifyGetKey } from 'jose';
 import { generateKeyPair, SignJWT } from 'jose';
 import { consumer, githubIssuer, gitlabIssuer, publisher, verify } from '#auth';
-import { submission } from '#model';
+import { errorResponse } from '#http';
+import type { AuthErrorCode } from '#model';
+import { HttpError, submission } from '#model';
 
 const origin = 'https://registry.actionlint.kjanat.dev';
 const s = submission({
@@ -184,4 +186,61 @@ test('strict submission rejects extra fields and host-like repositories', () => 
 	expect(() => submission({ ...s, url: 'https://evil.example' })).toThrow();
 	expect(() => submission({ ...s, repository: 'https://github.com/acme/plugin' })).toThrow();
 	expect(() => submission({ ...s, provider: 'gitea' })).toThrow();
+});
+
+test('validator diagnostics identify each failed check without echoing claims', async () => {
+	const policy = {
+		REGISTRY_ORIGIN: origin,
+		REGISTRY_REPOSITORY_ID: '10',
+		REGISTRY_WORKFLOW_REF: 'acme/plugin/.github/workflows/admission.yml@refs/heads/master',
+	};
+	const claims = {
+		...gh,
+		ref: 'refs/heads/master',
+		ref_type: 'branch',
+		event_name: 'schedule',
+		workflow_ref: policy.REGISTRY_WORKFLOW_REF,
+	};
+	const cases: { patch: JWTPayload; code: AuthErrorCode }[] = [
+		{ patch: { iss: 'private-claim-value' }, code: 'github_issuer' },
+		{ patch: { repository_visibility: 'private-claim-value' }, code: 'github_visibility' },
+		{ patch: { sub: '' }, code: 'github_subject' },
+		{ patch: { repository: '' }, code: 'github_repository' },
+		{ patch: { ref: '' }, code: 'github_ref' },
+		{ patch: { sha: 'private-claim-value' }, code: 'github_commit' },
+		{ patch: { workflow_ref: '' }, code: 'github_workflow' },
+		{ patch: { repository_id: '11' }, code: 'validator_repository' },
+		{ patch: { workflow_ref: 'private-claim-value' }, code: 'validator_workflow' },
+		{ patch: { ref: 'private-claim-value' }, code: 'validator_ref' },
+		{ patch: { ref_type: 'private-claim-value' }, code: 'validator_ref_type' },
+		{ patch: { event_name: 'private-claim-value' }, code: 'validator_event' },
+		{ patch: { event_name: undefined }, code: 'validator_event' },
+	];
+	const numericClaims: { field: string; code: AuthErrorCode }[] = [
+		{ field: 'repository_id', code: 'github_repository_id' },
+		{ field: 'repository_owner_id', code: 'github_owner_id' },
+		{ field: 'run_id', code: 'github_run_id' },
+		{ field: 'run_attempt', code: 'github_run_attempt' },
+	];
+	for (const { field, code } of numericClaims) {
+		for (const value of [undefined, 10, '', '0', 'private-claim-value']) {
+			cases.push({ patch: { [field]: value }, code });
+		}
+	}
+	for (const item of cases) {
+		try {
+			consumer({ ...claims, ...item.patch }, policy);
+			throw new Error('unauthorized validator was accepted');
+		} catch (error) {
+			if (!(error instanceof HttpError)) throw error;
+			expect(error.status).toBe(403);
+			expect(error.code).toBe(item.code);
+			const response = errorResponse(error);
+			expect(response.status).toBe(403);
+			const body = await response.text();
+			expect(body).toContain(`"code":"${item.code}"`);
+			expect(body).not.toContain('private-claim-value');
+		}
+	}
+	expect(consumer(claims, policy).repository_id).toBe('10');
 });

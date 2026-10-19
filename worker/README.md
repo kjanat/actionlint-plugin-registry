@@ -96,6 +96,13 @@ The possible statuses are `pending`, `validating`, `published`, `rejected`, and
 `failed`. The health endpoint `GET /health` returns `{"status":"ok"}`. Responses
 disable caching. The API does not enable CORS for browser-based publication clients.
 
+GitHub identity and validator authorization failures include a fixed `code` that
+identifies the failed check without revealing claim values. The Python client
+accepts only its closed list of codes and renders local descriptions; it never
+prints response text. An unrecognized, oversized, or non-JSON error body is reported
+as `no recognized registry error code`, so edge failures remain distinguishable
+from recognized Worker authorization failures.
+
 ## Persistence and retry rules
 
 The prototype stores its queue in one SQLite Durable Object. Each transaction
