@@ -55,7 +55,7 @@ func TestCompatibilityEvidenceDoesNotRewriteRelease(t *testing.T) {
 		t.Fatal("compatibility check rewrote release")
 	}
 	output := t.TempDir()
-	if err = Export(index, output, nil, observations...); err != nil {
+	if err = Export(index, output, nil, nil, observations...); err != nil {
 		t.Fatal(err)
 	}
 	var manifest PluginManifest
@@ -97,7 +97,7 @@ func TestUnknownABIIsUntestedWithoutReports(t *testing.T) {
 		t.Fatal(err)
 	}
 	output := t.TempDir()
-	if err := Export(index, output, nil); err != nil {
+	if err := Export(index, output, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	var manifest PluginManifest
@@ -132,7 +132,7 @@ func TestLegacyRecordsRetainTheirOriginalBytes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = Export(loaded, t.TempDir(), nil); err != nil {
+	if err = Export(loaded, t.TempDir(), nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err = store.Merge(loaded); err != nil {

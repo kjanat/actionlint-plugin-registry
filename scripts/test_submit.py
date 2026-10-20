@@ -138,9 +138,7 @@ class HTTPTests(unittest.TestCase):
                 opener.return_value.open.return_value = response
                 registry_api.request_json(endpoint, TOKEN, {})
             request = opener.return_value.open.call_args.args[0]
-            self.assertEqual(
-                request.get_header("User-agent"), "actionlint-plugin-registry/1"
-            )
+            self.assertEqual(request.get_header("User-agent"), "actionlint-registry/1")
             self.assertEqual(request.get_header("Authorization"), "Bearer " + TOKEN)
 
     def test_redirects_rejected_without_forwarding_authorization(self):

@@ -26,7 +26,7 @@ func TestReleaseStatusAuditAndExport(t *testing.T) {
 	index := Index{SchemaVersion: 1, Entries: []Entry{entry}}
 	store := StatusStore{Directory: filepath.Join(t.TempDir(), "status")}
 	before := t.TempDir()
-	if err := Export(index, before, nil); err != nil {
+	if err := Export(index, before, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	var empty StatusSnapshot
@@ -46,7 +46,7 @@ func TestReleaseStatusAuditAndExport(t *testing.T) {
 			t.Fatalf("current status: %+v, %v", current, err)
 		}
 		output := t.TempDir()
-		if err := Export(index, output, current); err != nil {
+		if err := Export(index, output, current, nil); err != nil {
 			t.Fatal(err)
 		}
 		version := filepath.Join("plugins", entry.Receipt.PluginKey(), "versions", key(entry.Submission.Tag)+".json")

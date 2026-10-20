@@ -68,7 +68,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Obtain the digest of the exact uploaded asset in your release workflow.
-      - uses: kjanat/actionlint-plugin-registry@master # Pin a reviewed commit SHA.
+      - uses: kjanat/actionlint-registry@master # Pin a reviewed commit SHA.
         with:
           asset: plugin.wasm
           sha256: ${{ vars.PLUGIN_RELEASE_SHA256 }}

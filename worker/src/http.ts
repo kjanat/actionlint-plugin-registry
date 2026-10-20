@@ -26,7 +26,7 @@ export function preflight(
 			!/^[1-9][0-9]*$/u.test(policy.REGISTRY_REPOSITORY_ID)
 			|| policy.REGISTRY_ORIGIN !== 'https://registry.actionlint.kjanat.dev'
 			|| policy.REGISTRY_WORKFLOW_REF
-				!== 'kjanat/actionlint-plugin-registry/.github/workflows/admission.yml@refs/heads/master'
+				!== 'kjanat/actionlint-registry/.github/workflows/admission.yml@refs/heads/master'
 		) {
 			return json({ error: 'The publication inbox is not configured correctly.' }, 503);
 		}
@@ -39,7 +39,7 @@ export function preflight(
 			return new Response(
 				request.method === 'HEAD'
 					? null
-					: '<!doctype html><html><head><meta name="go-import" content="registry.actionlint.kjanat.dev git https://github.com/kjanat/actionlint-plugin-registry"></head></html>',
+					: '<!doctype html><html><head><meta name="go-import" content="registry.actionlint.kjanat.dev git https://github.com/kjanat/actionlint-registry"></head></html>',
 				{
 					headers: {
 						'content-type': 'text/html; charset=utf-8',

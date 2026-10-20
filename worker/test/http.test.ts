@@ -5,7 +5,7 @@ import { body } from '#model';
 const policy = {
 	REGISTRY_ORIGIN: 'https://registry.actionlint.kjanat.dev',
 	REGISTRY_REPOSITORY_ID: '1424600475',
-	REGISTRY_WORKFLOW_REF: 'kjanat/actionlint-plugin-registry/.github/workflows/admission.yml@refs/heads/master',
+	REGISTRY_WORKFLOW_REF: 'kjanat/actionlint-registry/.github/workflows/admission.yml@refs/heads/master',
 };
 
 test('The API root redirects visitors to the catalogue before durable-object access', () => {
@@ -28,7 +28,7 @@ test('Go discovery resolves the module and CLI paths without redirecting', async
 		expect(response?.headers.get('content-type')).toBe('text/html; charset=utf-8');
 		expect(response?.headers.has('location')).toBe(false);
 		expect(await response?.text()).toContain(
-			'name="go-import" content="registry.actionlint.kjanat.dev git https://github.com/kjanat/actionlint-plugin-registry"',
+			'name="go-import" content="registry.actionlint.kjanat.dev git https://github.com/kjanat/actionlint-registry"',
 		);
 	}
 	const head = preflight(new Request(`${policy.REGISTRY_ORIGIN}/?go-get=1`, { method: 'HEAD' }), policy);

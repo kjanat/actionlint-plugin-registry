@@ -36,6 +36,7 @@ func run(ctx context.Context, args []string) error {
 	artifactPath := flags.String("artifact", "", "Inspect this local WASM file or check it with an adapter.")
 	candidatePath := flags.String("candidate", "", "Merge validated plugin records from this directory.")
 	outputPath := flags.String("output", "dist", "Write the generated catalogue to this directory.")
+	aliasesPath := flags.String("aliases", "registry/aliases.json", "Read registry-maintained alias assignments for catalogue export.")
 	downloadCounts := flags.Bool("download-counts", false, "Refresh GitHub asset download counts when exporting the catalogue.")
 	pluginID := flags.String("plugin", "", "Identify the plugin by provider/repository or host/repository.")
 	checker := flags.String("checker", "", "Run this trusted checker executable for an optional compatibility observation.")
@@ -132,6 +133,10 @@ func run(ctx context.Context, args []string) error {
 		fmt.Println(value)
 		return nil
 	case "export":
+		aliases, err := registry.ReadAliases(*aliasesPath, index)
+		if err != nil {
+			return err
+		}
 		statuses, err := (registry.StatusStore{Directory: *statusPath}).Load(index)
 		if err != nil {
 			return err
@@ -145,9 +150,9 @@ func run(ctx context.Context, args []string) error {
 			if err != nil {
 				return err
 			}
-			return registry.ExportWithDownloadCounts(ctx, index, *outputPath, client, statuses, evidence...)
+			return registry.ExportWithDownloadCounts(ctx, index, *outputPath, client, statuses, &aliases, evidence...)
 		}
-		return registry.Export(index, *outputPath, statuses, evidence...)
+		return registry.Export(index, *outputPath, statuses, &aliases, evidence...)
 	case "merge":
 		if *candidatePath == "" {
 			return errors.New("merge requires --candidate")

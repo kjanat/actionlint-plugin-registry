@@ -81,7 +81,7 @@ func TestStoreAndCatalogIsolation(t *testing.T) {
 		t.Fatal("idempotent receipt rewrote accepted evidence")
 	}
 	output := t.TempDir()
-	if err = Export(index, output, nil); err != nil {
+	if err = Export(index, output, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(output, "index.json"))

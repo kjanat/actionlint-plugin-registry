@@ -90,7 +90,7 @@ func TestArtifactMigrationKeepsHistoricalVersions(t *testing.T) {
 		t.Fatal("new release rewrote publisher identity")
 	}
 	output := t.TempDir()
-	if err := Export(loaded, output, nil); err != nil {
+	if err := Export(loaded, output, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	manifestPath := filepath.Join(output, "plugins", old.Receipt.PluginKey(), "index.json")
@@ -168,7 +168,7 @@ func TestArtifactSelectionDoesNotChangePublisherManifest(t *testing.T) {
 	coreAgain := changedArtifactFixture(t, old, "v3.0.0", "core", "plugin.wasm")
 	for _, entries := range [][]Entry{{old, component, coreAgain}, {component, coreAgain, old}} {
 		output := t.TempDir()
-		if err := Export(Index{SchemaVersion: 1, Entries: entries}, output, nil); err != nil {
+		if err := Export(Index{SchemaVersion: 1, Entries: entries}, output, nil, nil); err != nil {
 			t.Fatal(err)
 		}
 		var manifest PluginManifest

@@ -1,5 +1,5 @@
 {
-  "$id": "https://kjanat.github.io/actionlint-plugin-registry/schemas/submission.schema.json",
+  "$id": "https://plugins.actionlint.kjanat.dev/schemas/submission.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "actionlint plugin submission",
   "type": "object",

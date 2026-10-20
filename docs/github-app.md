@@ -2,7 +2,7 @@
 
 The `actionlint-plugin-registry` GitHub App starts validation workflows and commits
 accepted plugin records under its own bot identity. It is owned by `kjanat` and
-needs access only to `kjanat/actionlint-plugin-registry`. Plugin publishers do not
+needs access only to `kjanat/actionlint-registry`. Plugin publishers do not
 install the App. Their CI jobs authorize submissions through OIDC.
 
 ## Permissions

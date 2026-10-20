@@ -29,7 +29,7 @@ function grant(): Record<string, unknown> {
 		token: 'ghs_test_installation_token',
 		expires_at: new Date(Date.now() + 3600000).toISOString(),
 		permissions: { actions: 'write', metadata: 'read' },
-		repositories: [{ id: 1424600475, full_name: 'kjanat/actionlint-plugin-registry' }],
+		repositories: [{ id: 1424600475, full_name: 'kjanat/actionlint-registry' }],
 	};
 }
 
@@ -57,7 +57,7 @@ describe('GitHub App dispatch', () => {
 					return Response.json(grant(), { status: 201 });
 				}
 				expect(request.url).toBe(
-					'https://api.github.com/repos/kjanat/actionlint-plugin-registry/actions/workflows/admission.yml/dispatches',
+					'https://api.github.com/repos/kjanat/actionlint-registry/actions/workflows/admission.yml/dispatches',
 				);
 				expect(request.headers.get('authorization')).toBe('Bearer ghs_test_installation_token');
 				expect(request.redirect).toBe('error');
@@ -90,9 +90,10 @@ describe('GitHub App dispatch', () => {
 		for (const failAt of [1, 2]) {
 			let calls = 0;
 			try {
-				await dispatchAdmission(config(), async () => ++calls === failAt
-					? Response.json({ message: 'secret token and signed URL' }, { status: 403 })
-					: Response.json(grant(), { status: 201 }));
+				await dispatchAdmission(config(), async () =>
+					++calls === failAt
+						? Response.json({ message: 'secret token and signed URL' }, { status: 403 })
+						: Response.json(grant(), { status: 201 }));
 				throw new Error('Dispatch unexpectedly succeeded.');
 			} catch (error) {
 				expect(error).toMatchObject({
@@ -153,7 +154,7 @@ describe('GitHub App dispatch', () => {
 				{ ...grant(), permissions: { actions: 'write', contents: 'write' } },
 				{ ...grant(), permissions: { actions: 'write', metadata: 'write' } },
 				{ ...grant(), repositories: [] },
-				{ ...grant(), repositories: [{ id: 99, full_name: 'kjanat/actionlint-plugin-registry' }] },
+				{ ...grant(), repositories: [{ id: 99, full_name: 'kjanat/actionlint-registry' }] },
 				{ ...grant(), repositories: [{ id: 1424600475, full_name: 'attacker/registry' }] },
 				{ ...grant(), expires_at: new Date(0).toISOString() },
 				{ ...grant(), token: 'secret\nheader' },

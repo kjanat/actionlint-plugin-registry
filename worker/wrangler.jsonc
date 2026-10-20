@@ -17,7 +17,7 @@
     "GITHUB_APP_INSTALLATION_ID": "172822417",
     "REGISTRY_ORIGIN": "https://registry.actionlint.kjanat.dev",
     "REGISTRY_REPOSITORY_ID": "1424600475",
-    "REGISTRY_WORKFLOW_REF": "kjanat/actionlint-plugin-registry/.github/workflows/admission.yml@refs/heads/master"
+    "REGISTRY_WORKFLOW_REF": "kjanat/actionlint-registry/.github/workflows/admission.yml@refs/heads/master"
   },
   "durable_objects": {
     "bindings": [{ "name": "INBOX", "class_name": "PublicationInbox" }]

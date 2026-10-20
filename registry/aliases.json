@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "aliases": {
+    "shellcheck": {
+      "repository": "github.com/kjanat/actionlint-plugin-shellcheck"
+    },
+    "ruff": {
+      "repository": "github.com/kjanat/actionlint-plugin-ruff",
+      "reserved": true
+    }
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "$id": "https://kjanat.github.io/actionlint-plugin-registry/schemas/manifest.schema.json",
+  "$id": "https://plugins.actionlint.kjanat.dev/schemas/manifest.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "Generated per-plugin version manifest",
   "type": "object",

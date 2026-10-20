@@ -172,6 +172,13 @@ in `wrangler.jsonc`. Then run `bunx wrangler deploy` from this directory. The Wo
 uses `registry.actionlint.kjanat.dev`. Access through workers.dev and preview URLs is
 disabled.
 
+The source repository is `kjanat/actionlint-registry` (repository ID `1424600475`).
+Its name is checked in the GitHub App dispatcher, validator workflow identity,
+and Go vanity metadata. A repository rename must update all three and the
+`REGISTRY_WORKFLOW_REF` variable together. The deployed Worker remains
+`actionlint-plugin-registry`; the Durable Object namespace, GitHub App slug and
+public domains are independent resources and keep their existing identities.
+
 References: [Cloudflare SQLite storage](https://developers.cloudflare.com/durable-objects/api/sqlite-storage-api/),
 [GitHub OIDC](https://docs.github.com/en/actions/reference/security/oidc),
 [GitLab ID tokens](https://docs.gitlab.com/ci/secrets/id_token_authentication/).

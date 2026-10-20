@@ -29,7 +29,7 @@ export class DispatchFailure extends Error {
 	}
 }
 
-const repository = 'kjanat/actionlint-plugin-registry';
+const repository = 'kjanat/actionlint-registry';
 const repositoryID = '1424600475';
 const api = 'https://api.github.com';
 const maxResponse = 65536;
@@ -116,7 +116,7 @@ async function post(
 					authorization: `Bearer ${token}`,
 					accept: 'application/vnd.github+json',
 					'content-type': 'application/json',
-					'user-agent': 'actionlint-plugin-registry',
+					'user-agent': 'actionlint-registry',
 					'x-github-api-version': '2026-03-10',
 				},
 				body: JSON.stringify(body),
