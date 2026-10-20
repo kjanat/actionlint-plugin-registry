@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"registry.actionlint.kjanat.dev/internal/artifact"
 	"registry.actionlint.kjanat.dev/internal/registry"
@@ -26,7 +27,7 @@ func main() {
 
 func run(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: registry <admit|inspect|check|resolve|merge|export> [flags]")
+		return errors.New("usage: registry <admit|inspect|check|resolve|merge|export|status> [flags]")
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	storePath := flags.String("store", "registry/plugins", "Read or write accepted plugin records in this directory.")
@@ -40,6 +41,12 @@ func run(ctx context.Context, args []string) error {
 	checker := flags.String("checker", "", "Run this trusted checker executable for an optional compatibility observation.")
 	evidencePath := flags.String("compatibility", "registry/compatibility", "Read or append host compatibility observations in this directory.")
 	version := flags.String("version", "", "Resolve this exact accepted release tag.")
+	statusPath := flags.String("statuses", "registry/status", "Read or append audited release status events.")
+	state := flags.String("status", "", "Set active, deprecated, withdrawn or revoked.")
+	sha256 := flags.String("sha256", "", "Require this exact accepted artifact digest.")
+	reason := flags.String("reason", "", "Record the reason for the status change.")
+	replacement := flags.String("replacement", "", "Suggest a replacement plugin or version.")
+	actorPath := flags.String("actor-file", "", "Read the administrator audit identity from the trusted workflow.")
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -65,6 +72,24 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 	switch args[0] {
+	case "status":
+		if *pluginID == "" || *version == "" || *sha256 == "" || *state == "" || *reason == "" || *actorPath == "" {
+			return errors.New("status requires --plugin, --version, --sha256, --status, --reason and --actor-file")
+		}
+		actor, err := registry.ReadStatusActor(*actorPath)
+		if err != nil {
+			return err
+		}
+		entry, err := registry.Find(index, *pluginID, *version)
+		if err != nil {
+			return err
+		}
+		status := registry.ReleaseStatus{
+			Name:    entry.Submission.Provider + ".com/" + entry.Submission.Repository,
+			Version: *version, SHA256: *sha256, Status: registry.ReleaseState(*state),
+			Reason: *reason, Replacement: *replacement, ChangedAt: time.Now().UTC(), Actor: actor,
+		}
+		return (registry.StatusStore{Directory: *statusPath}).Add(index, status)
 	case "check":
 		if *checker == "" || *artifactPath == "" || *pluginID == "" || *version == "" {
 			return errors.New("check requires --checker, --artifact, --plugin and --version")
@@ -82,6 +107,24 @@ func run(ctx context.Context, args []string) error {
 		}
 		return json.NewEncoder(os.Stdout).Encode(evidence)
 	case "resolve":
+		statuses, err := (registry.StatusStore{Directory: *statusPath}).Load(index)
+		if err != nil {
+			return err
+		}
+		entry, err := registry.Find(index, *pluginID, *version)
+		if err != nil {
+			return err
+		}
+		if status := registry.StatusFor(entry, statuses); status != nil {
+			switch status.Status {
+			case registry.StatusRevoked:
+				return fmt.Errorf("artifact is revoked: %s", status.Reason)
+			case registry.StatusWithdrawn:
+				return fmt.Errorf("release is withdrawn: %s", status.Reason)
+			case registry.StatusDeprecated:
+				fmt.Fprintf(os.Stderr, "warning: release is deprecated: %s\n", status.Reason)
+			}
+		}
 		value, err := registry.Resolve(index, *pluginID, *version)
 		if err != nil {
 			return err
@@ -89,6 +132,10 @@ func run(ctx context.Context, args []string) error {
 		fmt.Println(value)
 		return nil
 	case "export":
+		statuses, err := (registry.StatusStore{Directory: *statusPath}).Load(index)
+		if err != nil {
+			return err
+		}
 		evidence, err := (registry.EvidenceStore{Directory: *evidencePath}).Load(index)
 		if err != nil {
 			return err
@@ -98,9 +145,9 @@ func run(ctx context.Context, args []string) error {
 			if err != nil {
 				return err
 			}
-			return registry.ExportWithDownloadCounts(ctx, index, *outputPath, client, evidence...)
+			return registry.ExportWithDownloadCounts(ctx, index, *outputPath, client, statuses, evidence...)
 		}
-		return registry.Export(index, *outputPath, evidence...)
+		return registry.Export(index, *outputPath, statuses, evidence...)
 	case "merge":
 		if *candidatePath == "" {
 			return errors.New("merge requires --candidate")

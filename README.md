@@ -204,9 +204,14 @@ go run ./cmd/registry resolve --store registry/plugins \
 actionlint --plugin 'https://publisher.example/plugin.wasm#sha256=...'
 ```
 
-Actionlint does not yet resolve registry names itself. Disable a conflicting built-in
+Actionlint can install declared registry plugins with `actionlint plugin install`;
+its adjacent lock pins the accepted artifact. Disable a conflicting built-in
 analyzer when replacing it, for example `--shellcheck=`. [Schemas](schemas/) describe
 submission, receipt, plugin, version and catalogue data.
+
+[Release status](docs/release-status.md) defines deprecation, withdrawal and
+permanent digest revocation. Audited status events remain separate from immutable
+publication records; every catalogue export includes `statuses.json`.
 
 ## Host compatibility
 

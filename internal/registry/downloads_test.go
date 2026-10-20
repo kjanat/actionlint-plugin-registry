@@ -103,10 +103,10 @@ func TestDownloadSnapshotsPreserveUnknownsAndRecords(t *testing.T) {
 	}
 	before := t.TempDir()
 	after := t.TempDir()
-	if err := Export(index, before); err != nil {
+	if err := Export(index, before, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := export(index, after, &snapshot); err != nil {
+	if err := export(index, after, nil, &snapshot); err != nil {
 		t.Fatal(err)
 	}
 	// Statistics never alter installer indexes or immutable publication evidence.

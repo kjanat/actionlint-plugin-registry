@@ -1,0 +1,107 @@
+{
+  "$id": "https://plugins.actionlint.kjanat.dev/schemas/statuses.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "actor": {
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "name",
+        "run_id",
+        "workflow"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$"
+        },
+        "kind": {
+          "const": "registry-admin"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9-]{0,38}$"
+        },
+        "run_id": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*:[1-9][0-9]*$"
+        },
+        "workflow": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+/\\.github/workflows/status\\.yml@refs/heads/master$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "release": {
+      "type": "object",
+      "required": [
+        "actor",
+        "changed_at",
+        "name",
+        "reason",
+        "sha256",
+        "status",
+        "version"
+      ],
+      "properties": {
+        "actor": {
+          "$ref": "#/$defs/actor"
+        },
+        "changed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "replacement": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "status": {
+          "enum": [
+            "active",
+            "deprecated",
+            "withdrawn",
+            "revoked"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "title": "Mutable release status projection",
+  "type": "object",
+  "required": [
+    "releases",
+    "schema_version"
+  ],
+  "properties": {
+    "releases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/release"
+      }
+    },
+    "schema_version": {
+      "const": 1
+    }
+  },
+  "additionalProperties": false
+}

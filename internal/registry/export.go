@@ -31,6 +31,7 @@ func Resolve(index Index, repository, tag string) (string, error) {
 
 type Catalog struct {
 	SchemaVersion int             `json:"schema_version"`
+	Statuses      string          `json:"statuses"`
 	Plugins       []CatalogPlugin `json:"plugins"`
 }
 type CatalogPlugin struct {
@@ -55,11 +56,16 @@ type PluginManifest struct {
 	Versions []VersionLink `json:"versions"`
 }
 
-func Export(index Index, directory string, evidence ...compatibility.Evidence) error {
-	return export(index, directory, nil, evidence...)
+func Export(index Index, directory string, statuses []ReleaseStatus, evidence ...compatibility.Evidence) error {
+	return export(index, directory, statuses, nil, evidence...)
 }
 
-func export(index Index, directory string, downloads *DownloadSnapshot, evidence ...compatibility.Evidence) error {
+func export(index Index, directory string, statuses []ReleaseStatus, downloads *DownloadSnapshot, evidence ...compatibility.Evidence) error {
+	for _, status := range statuses {
+		if _, err := status.validate(index); err != nil {
+			return err
+		}
+	}
 	observations := map[string][]CompatibilityLink{}
 	for _, item := range evidence {
 		if err := item.Validate(); err != nil {
@@ -84,7 +90,7 @@ func export(index Index, directory string, downloads *DownloadSnapshot, evidence
 		}
 		observations[item.Report.ArtifactSHA256] = append(observations[item.Report.ArtifactSHA256], CompatibilityLink{Host: item.Report.Host, Policy: item.Report.Policy, Outcome: item.Report.Outcome, Report: "../../" + path})
 	}
-	catalog := Catalog{SchemaVersion: 1, Plugins: []CatalogPlugin{}}
+	catalog := Catalog{SchemaVersion: 1, Statuses: "statuses.json", Plugins: []CatalogPlugin{}}
 	manifests := map[string]PluginManifest{}
 	for _, entry := range index.Entries {
 		id := entry.Receipt.PluginKey()
@@ -109,6 +115,9 @@ func export(index Index, directory string, downloads *DownloadSnapshot, evidence
 	if err := WriteJSON(filepath.Join(directory, "index.json"), catalog); err != nil {
 		return err
 	}
+	if err := WriteJSON(filepath.Join(directory, "statuses.json"), StatusSnapshot{SchemaVersion: 1, Releases: append([]ReleaseStatus{}, statuses...)}); err != nil {
+		return err
+	}
 	if downloads != nil {
 		if err := WriteJSON(filepath.Join(directory, "downloads.json"), downloads); err != nil {
 			return err
@@ -120,15 +129,21 @@ func export(index Index, directory string, downloads *DownloadSnapshot, evidence
 		}
 		return downloads.display(entry)
 	}
-	page := template.Must(template.New("index").Funcs(template.FuncMap{"downloads": count}).Parse(`<!doctype html>
+	state := func(entry Entry) string {
+		if status := StatusFor(entry, statuses); status != nil {
+			return string(status.Status) + ": " + status.Reason
+		}
+		return string(StatusActive)
+	}
+	page := template.Must(template.New("index").Funcs(template.FuncMap{"downloads": count, "status": state}).Parse(`<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>actionlint plugin registry</title>
 <style>body{font:1rem system-ui;max-width:70rem;margin:3rem auto;padding:1rem}td,th{text-align:left;padding:.5rem}code{overflow-wrap:anywhere}</style>
 <h1>actionlint plugin registry</h1><p>This catalogue lists authenticated plugin releases with verified checksums and discovery metadata. Each entry identifies its publisher and records a download URL and checksum. Acceptance does not guarantee that a plugin is safe or correct.</p>
 <p><a href="index.json">Download the JSON index</a> · <a href="https://github.com/kjanat/actionlint-plugin-registry#publishing">Learn how to publish a plugin</a></p>
 <p>Downloads are GitHub's cumulative counters for the accepted plugin assets. They include CI, validation and repeat downloads; they do not measure unique users or installations. Cached checks do not download again.</p>
 {{with .Downloads}}<p>Observed {{.ObservedAt.Format "2006-01-02 15:04:05 UTC"}} · <a href="downloads.json">Download counts JSON</a>. Scheduled refresh every six hours; unavailable or unsupported counts are not zero.</p>{{end}}
-<table><thead><tr><th>Plugin</th><th>Version</th><th>Format</th><th>Downloads</th><th>Download URL and checksum</th></tr></thead><tbody>
-{{range .Entries}}<tr><td>{{.Submission.Repository}}</td><td>{{.Submission.Tag}}</td><td>{{.Submission.Kind}}</td><td>{{downloads .}}</td><td><code>{{.PinnedURL}}</code></td></tr>{{else}}<tr><td colspan="5">The registry has not accepted any releases yet. Publishers must authenticate through their CI provider and submit a release that passes admission checks.</td></tr>{{end}}
+<table><thead><tr><th>Plugin</th><th>Version</th><th>Format</th><th>Status</th><th>Downloads</th><th>Download URL and checksum</th></tr></thead><tbody>
+{{range .Entries}}<tr><td>{{.Submission.Repository}}</td><td>{{.Submission.Tag}}</td><td>{{.Submission.Kind}}</td><td>{{status .}}</td><td>{{downloads .}}</td><td><code>{{.PinnedURL}}</code></td></tr>{{else}}<tr><td colspan="6">The registry has not accepted any releases yet. Publishers must authenticate through their CI provider and submit a release that passes admission checks.</td></tr>{{end}}
 </tbody></table></html>`))
 	f, err := os.Create(filepath.Join(directory, "index.html"))
 	if err != nil {

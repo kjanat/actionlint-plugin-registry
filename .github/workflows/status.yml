@@ -1,0 +1,101 @@
+name: Change release status
+
+on:
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: Canonical plugin repository (github.com/owner/repo)
+        required: true
+        type: string
+      version:
+        description: Exact accepted release tag
+        required: true
+        type: string
+      sha256:
+        description: Exact accepted artifact SHA256
+        required: true
+        type: string
+      status:
+        description: New release status (revoked is permanent for these bytes)
+        required: true
+        type: choice
+        options: [active, deprecated, withdrawn, revoked]
+      reason:
+        description: Public reason for this change
+        required: true
+        type: string
+      replacement:
+        description: Optional replacement plugin or version
+        type: string
+
+permissions: {}
+cache-mode: none
+
+# Serialize every writer of registry records, including admission.
+concurrency:
+  group: registry-admission
+  cancel-in-progress: false
+  queue: max
+
+jobs:
+  update:
+    if: github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { ref: master, persist-credentials: false }
+      - name: Authorize administrator and record trusted actor
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -B scripts/status_admin.py "$RUNNER_TEMP/status-actor.json"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with: { go-version-file: go.mod, cache: false }
+      - name: Append audited status event
+        env:
+          PLUGIN: ${{ inputs.plugin }}
+          VERSION: ${{ inputs.version }}
+          SHA256: ${{ inputs.sha256 }}
+          STATUS: ${{ inputs.status }}
+          REASON: ${{ inputs.reason }}
+          REPLACEMENT: ${{ inputs.replacement }}
+        run: |
+          go run ./cmd/registry status \
+            --plugin "$PLUGIN" --version "$VERSION" --sha256 "$SHA256" \
+            --status "$STATUS" --reason "$REASON" --replacement "$REPLACEMENT" \
+            --actor-file "$RUNNER_TEMP/status-actor.json"
+          go run ./cmd/registry export --output "$RUNNER_TEMP/status-catalogue"
+      - name: Create registry bot installation token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3
+        with:
+          client-id: ${{ vars.REGISTRY_APP_CLIENT_ID }}
+          private-key: ${{ secrets.REGISTRY_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+      - name: Commit status audit as registry bot
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          APP_SLUG: ${{ steps.app-token.outputs.app-slug }}
+        run: |
+          if [[ ! "$APP_SLUG" =~ ^[a-z0-9-]+$ ]]; then
+            printf '%s\n' 'Invalid registry App slug.' >&2
+            exit 1
+          fi
+          bot_id="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
+          if [[ ! "$bot_id" =~ ^[0-9]+$ ]]; then
+            printf '%s\n' 'Invalid registry bot ID.' >&2
+            exit 1
+          fi
+          git config user.name "${APP_SLUG}[bot]"
+          git config user.email "${bot_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+          gh auth setup-git
+          git add -- registry/status
+          git commit -m 'chore(registry): record release status change'
+          git push origin HEAD:refs/heads/master
+  pages:
+    needs: update
+    permissions: { contents: read, pages: write, id-token: write }
+    uses: $/.github/workflows/pages.yml
