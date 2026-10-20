@@ -5,7 +5,5 @@
   "owner_id": "6353477",
   "provider": "github",
   "repository": "kjanat/actionlint-plugin-shellcheck",
-  "plugin_id": "shellcheck-rs",
-  "asset": "plugin.wasm",
-  "kind": "component"
+  "plugin_id": "shellcheck-rs"
 }

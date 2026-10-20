@@ -272,8 +272,8 @@ func (i *Index) Add(e Entry) error {
 		if old.Receipt.PluginKey() != e.Receipt.PluginKey() && (old.Submission.Provider != e.Submission.Provider || !strings.EqualFold(old.Submission.Repository, e.Submission.Repository)) {
 			continue
 		}
-		if old.Receipt.PluginKey() != e.Receipt.PluginKey() || old.OwnerID != e.OwnerID || old.Submission.Repository != e.Submission.Repository || old.RepositoryID != e.RepositoryID || old.Submission.Asset != e.Submission.Asset || old.Submission.Kind != e.Submission.Kind || old.PluginID() != e.PluginID() {
-			return errors.New("registered repository identity, plugin identity or artifact selection changed")
+		if pluginFor(old) != pluginFor(e) {
+			return errors.New("registered publisher or plugin identity changed")
 		}
 		if old.Submission.Tag == e.Submission.Tag {
 			if old.Submission != e.Submission || old.ReleaseID != e.ReleaseID || old.AssetID != e.AssetID || old.Commit != e.Commit || old.URL != e.URL || old.UpstreamImmutable != e.UpstreamImmutable {

@@ -180,9 +180,17 @@ The JSON records retain the original publisher, repository, and tag names. Direc
 and file names use hashes to avoid case collisions, reserved Windows filenames,
 and path traversal through tag names. Each version records its download URL,
 checksum, authenticated submission receipt, embedded metadata, and release evidence.
-A new release can declare a new ABI or component interface without changing the
-registry. Repository transfers and changes to a plugin's identity, asset name, or
-container format still require a migration mechanism.
+A new release can change its ABI, component interface, asset name, or container
+format. These belong to the immutable version record. Schema-1 `plugin.json`
+contains only the publisher and plugin identity; it has no `asset` or `kind`.
+Previously accepted version files are never rewritten. Repository
+transfers and changes to the plugin ID still require an explicit identity migration.
+
+`registry/sources.json` is an explicit discovery seed, not publication authority.
+It names the preferred artifact for future discovery; it is not inferred from
+version order. Currently admission consumes authenticated submissions directly,
+and no scheduled job reads the seed. Historical releases continue resolving from
+their own version records, regardless of the current preferred artifact.
 
 The generated root `index.json` contains plugin summaries and links. Per-plugin indexes
 contain version summaries and links; version records contain full evidence and metadata.

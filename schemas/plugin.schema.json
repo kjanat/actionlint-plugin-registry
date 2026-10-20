@@ -4,9 +4,7 @@
   "title": "Registered publisher and plugin identity",
   "type": "object",
   "required": [
-    "asset",
     "issuer",
-    "kind",
     "owner_id",
     "plugin_id",
     "provider",
@@ -15,19 +13,9 @@
     "schema_version"
   ],
   "properties": {
-    "asset": {
-      "type": "string",
-      "minLength": 1
-    },
     "issuer": {
       "type": "string",
       "minLength": 1
-    },
-    "kind": {
-      "enum": [
-        "core",
-        "component"
-      ]
     },
     "owner_id": {
       "type": "string",

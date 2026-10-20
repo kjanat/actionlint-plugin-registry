@@ -1,8 +1,8 @@
 [
   {
     "repository": "kjanat/actionlint-plugin-ruff",
-    "asset": "plugin.wasm",
-    "kind": "core",
+    "asset": "plugin.component.wasm",
+    "kind": "component",
     "provider": "github"
   },
   {

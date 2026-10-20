@@ -82,8 +82,10 @@ func (service Service) Admit(ctx context.Context, index *Index, receipt Receipt)
 		if old.Receipt.PluginKey() != receipt.PluginKey() && (old.Submission.Provider != s.Provider || !strings.EqualFold(old.Submission.Repository, s.Repository)) {
 			continue
 		}
-		if old.Receipt.PluginKey() != receipt.PluginKey() || old.OwnerID != entry.OwnerID || old.Submission.Asset != s.Asset || old.Submission.Kind != s.Kind {
-			return Entry{}, reject("registered publisher or artifact identity changed")
+		if old.Receipt.PluginKey() != receipt.PluginKey() || old.OwnerID != entry.OwnerID ||
+			old.RepositoryID != entry.RepositoryID || old.Submission.Provider != s.Provider ||
+			old.Submission.Repository != s.Repository {
+			return Entry{}, reject("registered publisher identity changed")
 		}
 		if old.Submission.Tag == s.Tag {
 			if old.Submission != s || old.ReleaseID != entry.ReleaseID || old.AssetID != entry.AssetID || old.Commit != entry.Commit || old.URL != entry.URL {
@@ -117,6 +119,11 @@ func (service Service) Admit(ctx context.Context, index *Index, receipt Receipt)
 	expectedRepository := "https://" + s.Provider + ".com/" + s.Repository
 	if !strings.EqualFold(declaration.Repository, expectedRepository) || strings.TrimPrefix(declaration.PluginVersion, "v") != strings.TrimPrefix(s.Tag, "v") {
 		return Entry{}, reject("embedded repository or version disagrees with authenticated release")
+	}
+	for _, old := range index.Entries {
+		if old.Receipt.PluginKey() == receipt.PluginKey() && old.PluginID() != declaration.PluginID {
+			return Entry{}, reject("registered plugin identity changed")
+		}
 	}
 	entry.RecordVersion = 2
 	entry.Artifact = &declaration

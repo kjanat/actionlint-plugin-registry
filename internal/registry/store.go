@@ -19,12 +19,15 @@ type Plugin struct {
 	Provider      string `json:"provider"`
 	Repository    string `json:"repository"`
 	PluginID      string `json:"plugin_id"`
-	Asset         string `json:"asset"`
-	Kind          string `json:"kind"`
 }
 
 func pluginFor(e Entry) Plugin {
-	return Plugin{1, e.Receipt.Identity.Issuer, e.Receipt.Identity.RepositoryID, e.Receipt.Identity.OwnerID, e.Submission.Provider, e.Submission.Repository, e.PluginID(), e.Submission.Asset, e.Submission.Kind}
+	return Plugin{
+		SchemaVersion: 1,
+		Issuer:        e.Receipt.Identity.Issuer, RepositoryID: e.Receipt.Identity.RepositoryID,
+		OwnerID: e.Receipt.Identity.OwnerID, Provider: e.Submission.Provider,
+		Repository: e.Submission.Repository, PluginID: e.PluginID(),
+	}
 }
 
 type Store struct{ Directory string }
