@@ -2,6 +2,8 @@ name: Publish registry
 
 on:
   push: { branches: [master] }
+  schedule:
+    - cron: "23 */6 * * *"
   workflow_dispatch:
   workflow_call:
 
@@ -29,9 +31,22 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with: { go-version-file: go.mod, cache: false }
       - name: Export static registry
-        run: go run ./cmd/registry export
-          --store registry/plugins
-          --output dist
+        id: export
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          go run ./cmd/registry export \
+            --store registry/plugins \
+            --output dist \
+            --download-counts
+          printf 'timestamp=%s\n' "$(date -u +'%Y%m%dT%H%M%SZ')" >> "$GITHUB_OUTPUT"
+      - name: Preserve download count observation
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: download-counts-${{ steps.export.outputs.timestamp }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/downloads.json
+          if-no-files-found: error
+          retention-days: 90
       - name: Copy schema files
         run: mkdir -p dist/schemas && cp -R schemas/. dist/schemas/
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5

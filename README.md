@@ -11,6 +11,36 @@ binaries. Host compatibility is recorded separately and does not control publica
 - OIDC identifies who authorized a submission. Acceptance means the release passed
   the admission checks; it does not guarantee that the plugin is safe or correct.
 
+## Download counts
+
+The catalogue displays GitHub's cumulative `download_count` for each accepted
+plugin asset. Only the admitted asset ID, name and SHA-256 digest are counted;
+sidecars such as schemas and checksums are excluded. These are downloads, not
+unique users or installations: validation, CI and repeated downloads contribute,
+while cached checks do not.
+
+[`downloads.json`](https://plugins.actionlint.kjanat.dev/downloads.json) contains
+the observation time, release identities and counts. `available` includes a
+nonnegative `count` (including zero); `unavailable` and `unsupported` omit it.
+GitLab counts are currently unsupported. Failed requests and rate limits do not
+become zero and do not block catalogue publication. Counts are separate from
+immutable publication records and installer indexes.
+
+The Pages workflow refreshes counts on publication and on a six-hour schedule
+(GitHub may delay scheduled runs). Each run retains a timestamped
+`download-counts-*` artifact for 90 days, providing observation history without
+rewriting publication records. The public JSON contains the latest snapshot;
+history starts when this collection is enabled. There is no client telemetry.
+
+To collect a snapshot locally using `GH_TOKEN` or existing GitHub CLI credentials:
+
+```sh
+go run ./cmd/registry export --store registry/plugins --output dist --download-counts
+```
+
+Omit `--download-counts` for a network-free export. A refresh has a one-minute
+budget; assets not observed within that budget are marked unavailable.
+
 ## Publishing
 
 Publish a tagged release with an embedded `actionlint.plugin` custom section.

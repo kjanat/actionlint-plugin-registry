@@ -35,6 +35,7 @@ func run(ctx context.Context, args []string) error {
 	artifactPath := flags.String("artifact", "", "Inspect this local WASM file or check it with an adapter.")
 	candidatePath := flags.String("candidate", "", "Merge validated plugin records from this directory.")
 	outputPath := flags.String("output", "dist", "Write the generated catalogue to this directory.")
+	downloadCounts := flags.Bool("download-counts", false, "Refresh GitHub asset download counts when exporting the catalogue.")
 	pluginID := flags.String("plugin", "", "Identify the plugin by provider/repository or host/repository.")
 	checker := flags.String("checker", "", "Run this trusted checker executable for an optional compatibility observation.")
 	evidencePath := flags.String("compatibility", "registry/compatibility", "Read or append host compatibility observations in this directory.")
@@ -91,6 +92,13 @@ func run(ctx context.Context, args []string) error {
 		evidence, err := (registry.EvidenceStore{Directory: *evidencePath}).Load(index)
 		if err != nil {
 			return err
+		}
+		if *downloadCounts {
+			client, err := registry.NewGitHub(os.Getenv("GH_TOKEN"))
+			if err != nil {
+				return err
+			}
+			return registry.ExportWithDownloadCounts(ctx, index, *outputPath, client, evidence...)
 		}
 		return registry.Export(index, *outputPath, evidence...)
 	case "merge":
