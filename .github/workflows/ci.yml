@@ -52,6 +52,8 @@ jobs:
         with: { persist-credentials: false }
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with: { bun-version-file: ".tool-versions", no-cache: true }
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with: { node-version: "26.10.0" }
       - name: Install locked dependencies
         run: bun install --frozen-lockfile
       - name: Lint Worker
@@ -62,3 +64,5 @@ jobs:
         run: bun test
       - name: Validate Worker deployment bundle
         run: bun run check:bundle
+      - name: Test dispatch and redirect rejection in workerd
+        run: bun run test:runtime

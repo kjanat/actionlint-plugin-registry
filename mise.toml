@@ -1,4 +1,5 @@
 [tools]
+node                                    = "26.10.0"
 "github:oven-sh/bun"                      = { prefix = "1.4", version_prefix = "bun-v" }
 "github:kjanat/dprint"                    = "latest"
 "github:kjanat/runner"                    = "latest"
@@ -40,7 +41,7 @@ run = 'python -B -m unittest discover -s scripts -p "test_*.py"'
 
 [tasks."check:worker"]
 dir = "worker"
-run = ["bun run lint", "bun run typecheck", "bun test", "bun run check:bundle"]
+run = ["bun run lint", "bun run typecheck", "bun test", "bun run check:bundle", "bun run test:runtime"]
 
 [tasks.modernize]
 run = "go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -fix ./..."

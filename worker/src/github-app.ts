@@ -110,7 +110,9 @@ async function post(
 		response = await fetcher(
 			new Request(api + path, {
 				method: 'POST',
-				redirect: 'error',
+				// Workerd supports manual/follow only. Reject non-2xx below;
+				// never forward the installation token across a redirect.
+				redirect: 'manual',
 				signal: AbortSignal.timeout(10000),
 				headers: {
 					authorization: `Bearer ${token}`,

@@ -6,11 +6,12 @@
     "#*": "./src/*.ts"
   },
   "scripts": {
-    "lint": "biome lint src test --error-on-warnings",
+    "lint": "biome lint src test scripts --error-on-warnings",
     "test": "bun test",
     "typecheck": "tsc --noEmit",
     "prepare": "wrangler types",
-    "check:bundle": "wrangler deploy --dry-run --outdir .dry-run"
+    "check:bundle": "wrangler deploy --dry-run --outdir .dry-run",
+    "test:runtime": "node scripts/runtime-dispatch.ts"
   },
   "dependencies": {
     "jose": "6.2.13"
@@ -18,6 +19,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
     "@types/bun": "1.4.3",
+    "miniflare": "5.20261019.0-beta",
     "typescript": "7.0.2",
     "wrangler": "4.151.2"
   },

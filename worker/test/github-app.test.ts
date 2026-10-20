@@ -52,7 +52,7 @@ describe('GitHub App dispatch', () => {
 						issuer: 'Iv23testapp',
 					});
 					expect(verified.payload.exp).toBeGreaterThan(Math.floor(Date.now() / 1000));
-					expect(request.redirect).toBe('error');
+					expect(request.redirect).toBe('manual');
 					expect(request.headers.get('x-github-api-version')).toBe('2026-03-10');
 					return Response.json(grant(), { status: 201 });
 				}
@@ -60,7 +60,7 @@ describe('GitHub App dispatch', () => {
 					'https://api.github.com/repos/kjanat/actionlint-registry/actions/workflows/admission.yml/dispatches',
 				);
 				expect(request.headers.get('authorization')).toBe('Bearer ghs_test_installation_token');
-				expect(request.redirect).toBe('error');
+				expect(request.redirect).toBe('manual');
 				expect(await request.json()).toEqual({ ref: 'master' });
 				return Response.json({ workflow_run_id: 5678 });
 			};
@@ -80,6 +80,25 @@ describe('GitHub App dispatch', () => {
 				? Response.json(grant(), { status: 201 })
 				: new Response(null, { status: 204 }));
 		expect(result).toEqual({ runID: null });
+	});
+
+	test('It rejects redirects at either GitHub request without following them.', async () => {
+		for (const redirectAt of [1, 2]) {
+			let calls = 0;
+			await expect(dispatchAdmission(config(), async request => {
+				expect(request.redirect).toBe('manual');
+				return ++calls === redirectAt
+					? new Response(null, { status: 302, headers: { location: 'https://other.example/' } })
+					: Response.json(grant(), { status: 201 });
+			})).rejects.toMatchObject({
+				details: {
+					code: 'http-error',
+					stage: redirectAt === 1 ? 'installation-token' : 'workflow-dispatch',
+					status: 302,
+				},
+			});
+			expect(calls).toBe(redirectAt);
+		}
 	});
 
 	test('It distinguishes configuration, signing and GitHub HTTP failures without exposing their inputs.', async () => {
