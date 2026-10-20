@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "issuer": "https://token.actions.githubusercontent.com",
+  "repository_id": "1422095402",
+  "owner_id": "6353477",
+  "provider": "github",
+  "repository": "kjanat/actionlint-plugin-shellcheck",
+  "plugin_id": "shellcheck-rs",
+  "asset": "plugin.wasm",
+  "kind": "component"
+}
