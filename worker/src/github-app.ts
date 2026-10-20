@@ -194,7 +194,12 @@ export async function dispatchAdmission(
 		if (grantedRepository.id !== Number(repositoryID) || grantedRepository.full_name !== repository) {
 			throw new DispatchFailure({ code: 'invalid', stage, reason: 'repository-identity' });
 		}
-		if (typeof grant.token !== 'string' || !/^[A-Za-z0-9_]{1,512}$/u.test(grant.token)) {
+		// Opaque bearer credentials: GitHub's stateless tokens exceed the old
+		// length and contain JWT punctuation. Validate transport safety only.
+		if (
+			typeof grant.token !== 'string' || grant.token.length > 8192
+			|| !/^[A-Za-z0-9._~+/-]+=*$/u.test(grant.token)
+		) {
 			throw new DispatchFailure({ code: 'invalid', stage, reason: 'token-format' });
 		}
 		if (

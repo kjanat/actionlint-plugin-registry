@@ -5,6 +5,7 @@ import { Miniflare } from 'miniflare';
 import type { Request as RuntimeRequest } from 'miniflare';
 
 const bundle = await readFile('.dry-run/index.js', 'utf8');
+const installationToken = `ghs_123_${'a'.repeat(600)}.test-payload.test_signature`;
 const { privateKey } = generateKeyPairSync('rsa', {
 	modulusLength: 2048,
 	privateKeyEncoding: { format: 'pem', type: 'pkcs8' },
@@ -82,6 +83,7 @@ for (const redirectAt of [0, 1, 2]) {
 								permissions: { actions: 'write' },
 							});
 						} else {
+							assert.equal(request.headers.get('authorization'), `Bearer ${installationToken}`);
 							assert.equal(
 								request.url,
 								'https://api.github.com/repos/kjanat/actionlint-registry/actions/workflows/admission.yml/dispatches',
@@ -93,7 +95,7 @@ for (const redirectAt of [0, 1, 2]) {
 						}
 						if (requests.length === 1) {
 							return Response.json({
-								token: 'fixture_token',
+								token: installationToken,
 								expires_at: new Date(Date.now() + 3600000).toISOString(),
 								permissions: { actions: 'write', metadata: 'read' },
 								repositories: [{ id: 1424600475, full_name: 'kjanat/actionlint-registry' }],

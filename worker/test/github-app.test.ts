@@ -73,6 +73,31 @@ describe('GitHub App dispatch', () => {
 		});
 	}
 
+	test('It forwards opaque stateless bearer tokens unchanged.', async () => {
+		const token = `ghs_123_${'a'.repeat(600)}.payload-with_punctuation.signature`;
+		let calls = 0;
+		const result = await dispatchAdmission(config(), async request => {
+			if (++calls === 1) return Response.json({ ...grant(), token });
+			expect(request.headers.get('authorization')).toBe(`Bearer ${token}`);
+			return Response.json({ workflow_run_id: 5678 });
+		});
+		expect(result).toEqual({ runID: '5678' });
+		expect(calls).toBe(2);
+	});
+
+	test('It rejects empty, unsafe or oversized bearer credentials before dispatch.', async () => {
+		for (const token of ['', 'with space', 'with\ttab', 'with\r\nnewline', 'unicode-é', 'a'.repeat(8193)]) {
+			let calls = 0;
+			await expect(dispatchAdmission(config(), async () => {
+				calls++;
+				return Response.json({ ...grant(), token });
+			})).rejects.toMatchObject({
+				details: { code: 'invalid', stage: 'installation-grant', reason: 'token-format' },
+			});
+			expect(calls).toBe(1);
+		}
+	});
+
 	test('It accepts a legacy dispatch response without a run ID.', async () => {
 		let calls = 0;
 		const result = await dispatchAdmission(config(), async () =>
