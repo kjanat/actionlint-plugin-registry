@@ -2,7 +2,7 @@ module registry.actionlint.kjanat.dev/adapters/actionlint
 
 go 1.27.0
 
-toolchain go1.27.2
+toolchain go1.27.3
 
 require actionlint.kjanat.dev v1.17.1-0.20261018164101-abe9f897d9d8
 
