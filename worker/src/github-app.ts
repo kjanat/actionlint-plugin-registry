@@ -18,6 +18,11 @@ type DispatchStage = RequestStage | 'configuration' | 'signing' | 'installation-
 
 type DispatchFailureDetails =
 	| { code: 'invalid'; stage: DispatchStage }
+	| {
+		code: 'invalid';
+		stage: 'installation-grant';
+		reason: 'permissions' | 'repositories-count' | 'repository-identity' | 'token-format' | 'expiry';
+	}
 	| { code: 'request-failed'; stage: RequestStage }
 	| { code: 'http-error'; stage: RequestStage; status: number };
 
@@ -181,17 +186,21 @@ export async function dispatchAdmission(
 			|| Object.entries(permissions).some(([name, value]) =>
 				name !== 'actions' && (name !== 'metadata' || value !== 'read')
 			)
-			|| !Array.isArray(grant.repositories) || grant.repositories.length !== 1
-		) throw new Error('GitHub returned an incorrectly scoped installation token.');
+		) throw new DispatchFailure({ code: 'invalid', stage, reason: 'permissions' });
+		if (!Array.isArray(grant.repositories) || grant.repositories.length !== 1) {
+			throw new DispatchFailure({ code: 'invalid', stage, reason: 'repositories-count' });
+		}
 		const grantedRepository = record(grant.repositories[0]);
 		if (grantedRepository.id !== Number(repositoryID) || grantedRepository.full_name !== repository) {
-			throw new Error('GitHub returned a token for the wrong repository.');
+			throw new DispatchFailure({ code: 'invalid', stage, reason: 'repository-identity' });
+		}
+		if (typeof grant.token !== 'string' || !/^[A-Za-z0-9_]{1,512}$/u.test(grant.token)) {
+			throw new DispatchFailure({ code: 'invalid', stage, reason: 'token-format' });
 		}
 		if (
-			typeof grant.token !== 'string' || !/^[A-Za-z0-9_]{1,512}$/u.test(grant.token)
-			|| typeof grant.expires_at !== 'string' || !Number.isFinite(Date.parse(grant.expires_at))
+			typeof grant.expires_at !== 'string' || !Number.isFinite(Date.parse(grant.expires_at))
 			|| Date.parse(grant.expires_at) <= Date.now() + 30000
-		) throw new Error('GitHub returned an invalid installation token.');
+		) throw new DispatchFailure({ code: 'invalid', stage, reason: 'expiry' });
 		const dispatched = await post(
 			fetcher,
 			'workflow-dispatch',

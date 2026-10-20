@@ -188,6 +188,22 @@ describe('GitHub App dispatch', () => {
 		}
 	});
 
+	test('It reports only a fixed classification for malformed installation grants.', async () => {
+		const cases = [
+			{ response: { ...grant(), permissions: { actions: 'read' } }, reason: 'permissions' },
+			{ response: { ...grant(), repositories: [] }, reason: 'repositories-count' },
+			{ response: { ...grant(), repositories: [{ id: 99 }] }, reason: 'repository-identity' },
+			{ response: { ...grant(), token: 'secret\ninvalid' }, reason: 'token-format' },
+			{ response: { ...grant(), expires_at: 'secret-invalid-date' }, reason: 'expiry' },
+		];
+		for (const item of cases) {
+			await expect(dispatchAdmission(config(), async () => Response.json(item.response)))
+				.rejects.toMatchObject({
+					details: { code: 'invalid', stage: 'installation-grant', reason: item.reason },
+				});
+		}
+	});
+
 	test('It bounds response bodies and does not expose upstream credentials or errors.', async () => {
 		for (
 			const fetcher of [
