@@ -13,6 +13,22 @@ export interface DispatchResult {
 
 export type GitHubFetch = (request: Request) => Promise<Response>;
 
+type RequestStage = 'installation-token' | 'workflow-dispatch';
+type DispatchStage = RequestStage | 'configuration' | 'signing' | 'installation-grant' | 'dispatch-response';
+
+type DispatchFailureDetails =
+	| { code: 'invalid'; stage: DispatchStage }
+	| { code: 'request-failed'; stage: RequestStage }
+	| { code: 'http-error'; stage: RequestStage; status: number };
+
+/** Only locally constructed classifications survive; never retain upstream errors or their causes. */
+export class DispatchFailure extends Error {
+	constructor(readonly details: DispatchFailureDetails) {
+		super('The GitHub App could not dispatch registry validation.');
+		this.name = 'DispatchFailure';
+	}
+}
+
 const repository = 'kjanat/actionlint-plugin-registry';
 const repositoryID = '1424600475';
 const api = 'https://api.github.com';
@@ -82,25 +98,43 @@ async function responseJSON(response: Response): Promise<Record<string, unknown>
 	}
 }
 
-async function post(fetcher: GitHubFetch, path: string, token: string, body: unknown): Promise<Response> {
-	const response = await fetcher(
-		new Request(api + path, {
-			method: 'POST',
-			redirect: 'error',
-			signal: AbortSignal.timeout(10000),
-			headers: {
-				authorization: `Bearer ${token}`,
-				accept: 'application/vnd.github+json',
-				'content-type': 'application/json',
-				'user-agent': 'actionlint-plugin-registry',
-				'x-github-api-version': '2026-03-10',
-			},
-			body: JSON.stringify(body),
-		}),
-	);
+async function post(
+	fetcher: GitHubFetch,
+	stage: RequestStage,
+	path: string,
+	token: string,
+	body: unknown,
+): Promise<Response> {
+	let response: Response;
+	try {
+		response = await fetcher(
+			new Request(api + path, {
+				method: 'POST',
+				redirect: 'error',
+				signal: AbortSignal.timeout(10000),
+				headers: {
+					authorization: `Bearer ${token}`,
+					accept: 'application/vnd.github+json',
+					'content-type': 'application/json',
+					'user-agent': 'actionlint-plugin-registry',
+					'x-github-api-version': '2026-03-10',
+				},
+				body: JSON.stringify(body),
+			}),
+		);
+	} catch {
+		throw new DispatchFailure({ code: 'request-failed', stage });
+	}
 	if (!response.ok) {
-		await response.body?.cancel();
-		throw new Error('GitHub refused the request.');
+		try {
+			await response.body?.cancel();
+		} catch {
+			// Cancellation errors cannot replace the known HTTP failure or expose response details.
+		}
+		if (!Number.isInteger(response.status) || response.status < 100 || response.status > 599) {
+			throw new DispatchFailure({ code: 'invalid', stage });
+		}
+		throw new DispatchFailure({ code: 'http-error', stage, status: response.status });
 	}
 	return response;
 }
@@ -110,12 +144,14 @@ export async function dispatchAdmission(
 	config: GitHubAppConfig,
 	fetcher: GitHubFetch = request => fetch(request),
 ): Promise<DispatchResult> {
+	let stage: DispatchStage = 'configuration';
 	try {
 		if (
 			!/^[A-Za-z0-9_.-]{1,128}$/u.test(config.GITHUB_APP_CLIENT_ID)
 			|| !/^[1-9][0-9]{0,19}$/u.test(config.GITHUB_APP_INSTALLATION_ID)
 			|| config.REGISTRY_REPOSITORY_ID !== repositoryID
 		) throw new Error('The GitHub App configuration is invalid.');
+		stage = 'signing';
 		const now = Math.floor(Date.now() / 1000);
 		const key = await importPKCS8(pkcs8(config.GITHUB_APP_PRIVATE_KEY), 'RS256');
 		const jwt = await new SignJWT({})
@@ -126,6 +162,7 @@ export async function dispatchAdmission(
 			.sign(key);
 		const response = await post(
 			fetcher,
+			'installation-token',
 			`/app/installations/${config.GITHUB_APP_INSTALLATION_ID}/access_tokens`,
 			jwt,
 			{
@@ -133,7 +170,9 @@ export async function dispatchAdmission(
 				permissions: { actions: 'write' },
 			},
 		);
+		stage = 'installation-token';
 		const grant = await responseJSON(response);
+		stage = 'installation-grant';
 		const permissions = record(grant.permissions);
 		if (
 			permissions.actions !== 'write'
@@ -153,10 +192,12 @@ export async function dispatchAdmission(
 		) throw new Error('GitHub returned an invalid installation token.');
 		const dispatched = await post(
 			fetcher,
+			'workflow-dispatch',
 			`/repos/${repository}/actions/workflows/admission.yml/dispatches`,
 			grant.token,
 			{ ref: 'master' },
 		);
+		stage = 'dispatch-response';
 		// Earlier GitHub API versions returned 204 without a workflow run identity.
 		if (dispatched.status === 204) return { runID: null };
 		if (dispatched.status !== 200) {
@@ -171,8 +212,9 @@ export async function dispatchAdmission(
 			throw new Error('GitHub returned an invalid workflow run identity.');
 		}
 		return { runID: String(result.workflow_run_id) };
-	} catch {
+	} catch (error) {
 		// Upstream errors may contain credentials or signed request details.
-		throw new Error('The GitHub App could not dispatch registry validation.');
+		if (error instanceof DispatchFailure) throw error;
+		throw new DispatchFailure({ code: 'invalid', stage });
 	}
 }

@@ -82,6 +82,50 @@ describe('GitHub App dispatch', () => {
 		expect(result).toEqual({ runID: null });
 	});
 
+	test('It distinguishes configuration, signing and GitHub HTTP failures without exposing their inputs.', async () => {
+		await expect(dispatchAdmission({ ...config(), GITHUB_APP_CLIENT_ID: 'secret\nissuer' }))
+			.rejects.toMatchObject({ details: { code: 'invalid', stage: 'configuration' } });
+		await expect(dispatchAdmission(config('secret private key')))
+			.rejects.toMatchObject({ details: { code: 'invalid', stage: 'signing' } });
+		for (const failAt of [1, 2]) {
+			let calls = 0;
+			try {
+				await dispatchAdmission(config(), async () => ++calls === failAt
+					? Response.json({ message: 'secret token and signed URL' }, { status: 403 })
+					: Response.json(grant(), { status: 201 }));
+				throw new Error('Dispatch unexpectedly succeeded.');
+			} catch (error) {
+				expect(error).toMatchObject({
+					details: {
+						code: 'http-error',
+						stage: failAt === 1 ? 'installation-token' : 'workflow-dispatch',
+						status: 403,
+					},
+				});
+				expect(JSON.stringify(error)).not.toContain('secret');
+				expect(error).not.toHaveProperty('cause');
+			}
+			expect(calls).toBe(failAt);
+		}
+	});
+
+	test('It classifies invalid grants separately and never dispatches with their tokens.', async () => {
+		let calls = 0;
+		await expect(dispatchAdmission(config(), async () => {
+			calls++;
+			return Response.json({ ...grant(), permissions: { actions: 'write', contents: 'write' } });
+		})).rejects.toMatchObject({ details: { code: 'invalid', stage: 'installation-grant' } });
+		expect(calls).toBe(1);
+	});
+
+	test('It discards network error messages and does not treat status zero as an HTTP failure.', async () => {
+		await expect(dispatchAdmission(config(), async () => {
+			throw new Error('secret request URL and token');
+		})).rejects.toMatchObject({ details: { code: 'request-failed', stage: 'installation-token' } });
+		await expect(dispatchAdmission(config(), async () => Response.error()))
+			.rejects.toMatchObject({ details: { code: 'invalid', stage: 'installation-token' } });
+	});
+
 	test('It refuses invalid configuration and malformed keys before making requests.', async () => {
 		for (
 			const input of [

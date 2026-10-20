@@ -1,5 +1,6 @@
 import { Database } from 'bun:sqlite';
-import { afterEach, expect, test } from 'bun:test';
+import { afterEach, expect, spyOn, test } from 'bun:test';
+import { DispatchFailure } from '#github-app';
 import type { Authorization, Identity } from '#model';
 import { submission } from '#model';
 import { DispatchOutbox, dispatchNotification, submitWithWakeup } from '#outbox';
@@ -136,6 +137,36 @@ test('an alarm failure does not consume a dispatch attempt', async () => {
 		throw new Error('Dispatch must not run.');
 	}, 100)).rejects.toThrow('alarm');
 	expect(database.query('SELECT attempts FROM dispatch_outbox').all()).toEqual([{ attempts: 0 }]);
+});
+
+test('failed dispatch logs only one sanitized classification and leaves its retry durable', async () => {
+	for (const failure of [
+		new DispatchFailure({ code: 'http-error', stage: 'workflow-dispatch', status: 403 }),
+		new DispatchFailure({ code: 'invalid', stage: 'signing' }),
+		new Error('secret token, private key and signed request URL'),
+	]) {
+		const { inbox, outbox } = fixture();
+		const accepted = inbox.submit(input, auth, 'hash', 100);
+		const messages: unknown[] = [];
+		const log = spyOn(console, 'error').mockImplementation((message: unknown) => {
+			messages.push(message);
+		});
+		try {
+			await dispatchNotification(outbox, async () => {}, async () => {
+				throw failure;
+			}, 100);
+			expect(messages).toEqual([JSON.stringify({
+				event: 'registry-dispatch-failed',
+				submission: accepted.id,
+				attempt: 1,
+				failure: failure instanceof DispatchFailure ? failure.details : { code: 'unexpected' },
+			})]);
+			expect(JSON.stringify(messages)).not.toContain('secret');
+			expect(outbox.next(100)).toBe(130);
+		} finally {
+			log.mockRestore();
+		}
+	}
 });
 
 test('consumer claims and expired notifications suppress dispatch', async () => {

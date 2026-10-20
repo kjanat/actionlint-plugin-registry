@@ -125,6 +125,13 @@ up to five attempts or one hour. Repeating a pending, active, rejected, or publi
 submission does not create another notification or reset its retry schedule. Claiming a request removes its pending
 notification. Scheduled workflow runs remain available if dispatch fails.
 
+Workers Logs records one `registry-dispatch-failed` event per failed notification
+attempt, with the submission ID, attempt number, failure stage and fixed code.
+HTTP refusals include the status code. Credentials, upstream response bodies and
+exception messages are never logged. Invocation logs are disabled; use these
+explicit diagnostics to distinguish signing, token issuance, token scope and
+workflow dispatch failures without exposing publisher requests.
+
 When the registry workflow claims a request, it receives a lease lasting sixty
 minutes. If the lease expires before completion, a later poll can claim the request
 again. After three expired attempts, the next poll marks the request `failed`.

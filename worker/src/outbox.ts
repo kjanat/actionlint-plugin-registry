@@ -1,3 +1,4 @@
+import { DispatchFailure } from '#github-app';
 import { object, text } from '#model';
 import type { Database } from '#store';
 
@@ -87,8 +88,14 @@ export async function dispatchNotification(
 	if (notification === null) return;
 	try {
 		await dispatch();
-	} catch {
-		// The retry is already durable. Do not log credentials or remote error bodies.
+	} catch (error) {
+		// The retry is durable. Log only our classification, never the thrown object/message.
+		console.error(JSON.stringify({
+			event: 'registry-dispatch-failed',
+			submission: notification.id,
+			attempt: notification.attempt,
+			failure: error instanceof DispatchFailure ? error.details : { code: 'unexpected' },
+		}));
 		return;
 	}
 	outbox.delivered(notification);
