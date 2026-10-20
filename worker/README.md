@@ -121,11 +121,16 @@ Token replay records expire, and hourly rate-limit records are removed after
 Each new submission also creates a dispatch notification in the same transaction.
 The Worker saves a Durable Object alarm before accepting the submission, then uses
 that alarm to notify GitHub. Failed notifications are retried at increasing intervals,
-up to five attempts or one hour. Repeating a pending, active, rejected, or published
-submission does not create another notification or reset its retry schedule. Claiming a request removes its pending
-notification. Scheduled workflow runs remain available if dispatch fails.
+up to five attempts or one hour. A fresh authenticated submission with identical
+metadata can requeue a pending request after notification exhaustion, expiry, or
+delivery without a consumer claim. Its original receipt and ID remain unchanged.
+An active notification keeps its backoff; replaying a token never requeues.
+Validating, rejected, and published submissions are never requeued by a retry.
+Claiming a request removes its pending notification. Scheduled workflow runs
+remain available if dispatch fails.
 
-Workers Logs records one `registry-dispatch-failed` event per failed notification
+Workers Logs records `registry-dispatch-succeeded` for an accepted dispatch and
+one `registry-dispatch-failed` event per failed notification
 attempt, with the submission ID, attempt number, failure stage and fixed code.
 HTTP refusals include the status code. Credentials, upstream response bodies and
 exception messages are never logged. Invocation logs are disabled; use these

@@ -165,6 +165,17 @@ export class InboxStore {
 						now,
 						now + 3600,
 					);
+				} else if (prior.status === 'pending') {
+					// A fresh authenticated retry can repair a notification that was
+					// exhausted, expired, or delivered without a consumer claiming it.
+					// Keep active backoff intact; token replays return above this path.
+					this.db.query(
+						'INSERT INTO dispatch_outbox (submission_id,next_attempt,expires) VALUES (?,?,?) ON CONFLICT(submission_id) DO UPDATE SET next_attempt=excluded.next_attempt,attempts=0,expires=excluded.expires WHERE dispatch_outbox.expires<=?',
+						text(prior.id),
+						now,
+						now + 3600,
+						now,
+					);
 				}
 				this.db.query(
 					'INSERT INTO replay VALUES (?, ?, ?, ?)',

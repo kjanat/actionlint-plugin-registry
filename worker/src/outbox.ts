@@ -99,4 +99,9 @@ export async function dispatchNotification(
 		return;
 	}
 	outbox.delivered(notification);
+	console.info(JSON.stringify({
+		event: 'registry-dispatch-succeeded',
+		submission: notification.id,
+		attempt: notification.attempt,
+	}));
 }

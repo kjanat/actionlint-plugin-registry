@@ -87,7 +87,7 @@ test('notification failure rolls back submission, replay and rate state', () => 
 	}
 });
 
-test('replay and fresh-token duplicates cannot recreate a delivered notification', async () => {
+test('token replay cannot redispatch, but a fresh pending retry can repair an unclaimed delivery', async () => {
 	const { inbox, outbox, database } = fixture();
 	const accepted = inbox.submit(input, auth, 'hash', 100);
 	expect(inbox.submit(input, auth, 'hash', 101)).toEqual(accepted);
@@ -97,12 +97,76 @@ test('replay and fresh-token duplicates cannot recreate a delivered notification
 	await dispatchNotification(outbox, async () => {}, async () => {
 		dispatched++;
 	}, 101);
-	inbox.submit(input, { ...auth, jti: 'three' }, 'hash', 102);
+	inbox.submit(input, auth, 'hash', 102);
 	await dispatchNotification(outbox, async () => {}, async () => {
 		dispatched++;
 	}, 102);
 	expect(dispatched).toBe(1);
 	expect(outbox.next(102)).toBeNull();
+	expect(inbox.submit(input, { ...auth, jti: 'three' }, 'hash', 103)).toEqual(accepted);
+	await dispatchNotification(outbox, async () => {}, async () => {
+		dispatched++;
+	}, 103);
+	expect(dispatched).toBe(2);
+	expect(inbox.status(accepted.id).status).toBe('pending');
+});
+
+test('a fresh authenticated retry repairs exhausted dispatch with the original claimable receipt', async () => {
+	const { inbox, outbox, database } = fixture();
+	const accepted = inbox.submit(input, auth, 'hash', 100);
+	const original = database.query('SELECT receipt FROM submissions').get();
+	for (const now of [100, 130, 190, 310, 550]) {
+		await dispatchNotification(outbox, async () => {}, async () => {
+			throw new DispatchFailure({ code: 'http-error', stage: 'workflow-dispatch', status: 503 });
+		}, now);
+	}
+	expect(outbox.next(580)).toBeNull();
+	expect(database.query('SELECT * FROM dispatch_outbox').all()).toEqual([]);
+	inbox.submit(input, auth, 'hash', 600);
+	expect(outbox.next(600)).toBeNull();
+	expect(inbox.submit(input, { ...auth, jti: 'retry' }, 'hash', 601)).toEqual(accepted);
+	let dispatched = 0;
+	await dispatchNotification(outbox, async () => {}, async () => {
+		dispatched++;
+	}, 602);
+	expect(dispatched).toBe(1);
+	expect(database.query('SELECT receipt FROM submissions').get()).toEqual(original);
+	expect(inbox.claim(identity, 603).claim?.receipt).toMatchObject({
+		id: accepted.id,
+		submission: input,
+		identity,
+	});
+});
+
+test('fresh pending retries preserve active backoff and the final in-flight attempt', () => {
+	const { inbox, outbox, database } = fixture();
+	inbox.submit(input, auth, 'hash', 100);
+	expect(outbox.reserve(100)?.attempt).toBe(1);
+	inbox.submit(input, { ...auth, jti: 'active' }, 'hash', 101);
+	expect(outbox.next(101)).toBe(130);
+	database.query('UPDATE dispatch_outbox SET attempts=5').run();
+	inbox.submit(input, { ...auth, jti: 'final' }, 'hash', 102);
+	expect(database.query('SELECT attempts,next_attempt FROM dispatch_outbox').all()).toEqual([
+		{ attempts: 5, next_attempt: 130 },
+	]);
+});
+
+test('fresh pending retries repair expired notifications before alarm cleanup', () => {
+	const { inbox, outbox } = fixture();
+	const accepted = inbox.submit(input, auth, 'hash', 100);
+	expect(inbox.submit(input, { ...auth, jti: 'retry' }, 'hash', 3700)).toEqual(accepted);
+	expect(outbox.reserve(3700)?.attempt).toBe(1);
+});
+
+test('fresh retries never dispatch validating, published, or rejected submissions', () => {
+	for (const status of ['validating', 'published', 'rejected']) {
+		const { inbox, outbox, database } = fixture();
+		const accepted = inbox.submit(input, auth, 'hash', 100);
+		inbox.claim(identity, 101);
+		database.query('UPDATE submissions SET status=?').run(status);
+		expect(inbox.submit(input, { ...auth, jti: 'retry' }, 'hash', 102)).toEqual(inbox.status(accepted.id));
+		expect(outbox.next(102)).toBeNull();
+	}
 });
 
 test('failed dispatch reserves exponential backoff before network and stops after five attempts', async () => {
