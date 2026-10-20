@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "issuer": "https://token.actions.githubusercontent.com",
+  "repository_id": "1412347408",
+  "owner_id": "6353477",
+  "provider": "github",
+  "repository": "kjanat/actionlint-plugin-ruff",
+  "plugin_id": "actionlint-plugin-ruff"
+}
