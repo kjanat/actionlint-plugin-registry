@@ -26,7 +26,7 @@ runs:
         cache: false
     - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
       with:
-        bun-version: "1.4.4"
+        bun-version-file: ${{ github.action_path }}/../.tool-versions
     - name: Install registry tooling
       shell: bash
       env:
