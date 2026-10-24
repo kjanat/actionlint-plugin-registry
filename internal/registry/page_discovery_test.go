@@ -133,3 +133,37 @@ func TestCatalogueMetadataIsEscapedOnBothPages(t *testing.T) {
 		}
 	}
 }
+
+func TestCatalogueExportsAdmissionAcceptedCaseExtensions(t *testing.T) {
+	for name, extension := range map[string]string{
+		"typed extensions":  `"Name":{"future":"extension"},"Description":["future"],"License":{"id":"future"}`,
+		"string extensions": `"Name":"Wrong name","Description":"Wrong description","License":"Wrong license"`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			entry := acceptedFixture(t)
+			declaration := *entry.Artifact
+			declaration.Metadata = json.RawMessage(strings.TrimSuffix(string(declaration.Metadata), "}") + "," + extension + "}")
+			if err := declaration.Validate(); err != nil {
+				t.Fatalf("admission rejected extension fixture: %v", err)
+			}
+			entry.Artifact = &declaration
+			index := Index{Entries: []Entry{entry}}
+			directory := t.TempDir()
+			if err := Export(index, directory, nil, nil); err != nil {
+				t.Fatalf("admission-accepted metadata blocked catalogue export: %v", err)
+			}
+			plugins, err := cataloguePlugins(index, nil, nil, nil)
+			if err != nil || len(plugins) != 1 {
+				t.Fatalf("missing plugin: %v, %v", plugins, err)
+			}
+			if plugin := plugins[0]; plugin.Name != "Example" || plugin.Description != "Example plugin" || plugin.License != "MIT" {
+				t.Fatalf("case variants replaced declared metadata: name=%q, description=%q, license=%q", plugin.Name, plugin.Description, plugin.License)
+			}
+			for _, page := range []string{readCataloguePage(t, directory), readPluginPage(t, directory, entry)} {
+				if !strings.Contains(page, "Example plugin") || strings.Contains(page, "Wrong description") {
+					t.Fatal("page rendered extension fields instead of declared metadata")
+				}
+			}
+		})
+	}
+}

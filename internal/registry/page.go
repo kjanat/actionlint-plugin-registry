@@ -3,6 +3,7 @@ package registry
 import (
 	"embed"
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
 	"html/template"
@@ -121,7 +122,11 @@ func cataloguePlugins(index Index, statuses []ReleaseStatus, downloads *Download
 		newest := plugin.Releases[0]
 		plugin.UpdatedAt = newest.PublishedAt
 		plugin.UpdatedVersion = newest.Submission.Tag
-		var metadata struct{ Name, Description, License string }
+		var metadata struct {
+			Name        string `json:"name"`
+			Description string `json:"description"`
+			License     string `json:"license"`
+		}
 		var raw json.RawMessage
 		if newest.Artifact != nil {
 			raw = newest.Artifact.Metadata
@@ -129,7 +134,7 @@ func cataloguePlugins(index Index, statuses []ReleaseStatus, downloads *Download
 			raw = newest.Validation.Metadata
 		}
 		if len(raw) > 0 {
-			if err := json.Unmarshal(raw, &metadata); err != nil {
+			if err := jsonv2.Unmarshal(raw, &metadata); err != nil {
 				return nil, fmt.Errorf("catalogue metadata for %s: %w", plugin.Repository, err)
 			}
 		}
