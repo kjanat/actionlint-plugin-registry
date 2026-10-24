@@ -1,10 +1,63 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { checkCandidate, checkPublished } from '@/scripts/check.ts';
 import { cleanEnvironment, execute } from '@/scripts/process.ts';
+
+test('delivery requests the actual release tag without synthesizing a version prefix', async () => {
+	// Stop at the installer call: a release named 1.0.0 must never request v1.0.0.
+	// Capture the installer handoff and stop before installation begins.
+	const directory = await mkdtemp(join(tmpdir(), 'registry-delivery-tag-'));
+	try {
+		const host = join(directory, 'host');
+		const fixture = join(directory, 'fixture.ts');
+		const receipt = join(directory, 'candidate.json');
+		const hostBytes = 'host handshake';
+		const fixtureBytes = 'export async function prepare() {}';
+		const hash = (value: string) => createHash('sha256').update(value).digest('hex');
+		await writeFile(host, hostBytes);
+		await writeFile(fixture, fixtureBytes);
+		await writeFile(
+			receipt,
+			JSON.stringify({
+				schema_version: 1,
+				offline: true,
+				missing_cache_rejected: true,
+				host: { sha256: hash(hostBytes) },
+				fixture: { sha256: hash(fixtureBytes) },
+				artifact: { repository: 'https://github.com/owner/repo', plugin_version: 'v1.0.0', sha256: 'a'.repeat(64) },
+			}),
+		);
+		for (const tag of ['1.0.0', 'v1.0.0']) {
+			const stopped = new Error('Installer handoff verified');
+			let installs = 0;
+			await assert.rejects(
+				checkPublished({
+					actionlint: host,
+					fixture,
+					receipt,
+					report: join(directory, 'delivery.json'),
+					tag,
+				}, async (binary, args, cwd, env, expected) => {
+					if (args[0] === 'version') return JSON.stringify({ version: 'test host' });
+					if (args[0] === 'plugin') {
+						assert.deepEqual(args, ['plugin', 'install', 'github.com/owner/repo', '--version', tag, '--json']);
+						installs++;
+						throw stopped;
+					}
+					return execute(binary, args, cwd, env, expected);
+				}),
+				(error) => error === stopped,
+			);
+			assert.equal(installs, 1);
+		}
+	} finally {
+		await rm(directory, { recursive: true, force: true });
+	}
+});
 
 test('a report cannot replace candidate bytes or its delivery receipt', async () => {
 	const directory = await mkdtemp(join(tmpdir(), 'registry-report-'));
@@ -25,6 +78,7 @@ test('a report cannot replace candidate bytes or its delivery receipt', async ()
 		assert.equal(await readFile(artifact, 'utf8'), 'candidate bytes');
 		await assert.rejects(
 			checkPublished({
+				tag: '1.0.0',
 				actionlint: process.execPath,
 				fixture: 'unused.ts',
 				receipt: artifact,
@@ -68,7 +122,7 @@ test('failed delivery preflight removes an old delivery report', async () => {
 		await writeFile(receipt, '{}');
 		await writeFile(report, '{"offline":true}');
 		await assert.rejects(
-			checkPublished({ actionlint: 'unused', fixture: 'unused.ts', receipt, report }),
+			checkPublished({ actionlint: 'unused', fixture: 'unused.ts', receipt, report, tag: '1.0.0' }),
 			/successful candidate receipt/,
 		);
 		await assert.rejects(readFile(report), /ENOENT/);

@@ -53,6 +53,12 @@ func NewReport(mode string) Report {
 	return Report{SchemaVersion: 1, Mode: mode, Accepted: []Entry{}, Rejected: []Failure{}}
 }
 
+// WriteReport keeps accepted records within their storage bound when nested.
+// Recovery reads one 2 MiB record plus a 32 KiB report envelope.
+func WriteReport(path string, report Report) error {
+	return writeJSON(path, report, false)
+}
+
 type Service struct {
 	Providers map[string]ReleaseProvider
 	Inspect   Inspector

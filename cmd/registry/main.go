@@ -197,7 +197,7 @@ func run(ctx context.Context, args []string) error {
 					report.Rejected = append(report.Rejected, registry.Failure{Repository: entry.Submission.Repository, Tag: entry.Submission.Tag, Error: mergeErr.Error(), Disposition: registry.FailureDisposition(mergeErr)})
 				}
 			}
-			if err = registry.WriteJSON(*reportPath, report); err != nil {
+			if err = registry.WriteReport(*reportPath, report); err != nil {
 				return errors.Join(mergeErr, err)
 			}
 		}
@@ -245,7 +245,7 @@ func run(ctx context.Context, args []string) error {
 			report.Rejected = append(report.Rejected, registry.Failure{Repository: receipt.Submission.Repository, Tag: receipt.Submission.Tag, Error: admissionErr.Error(), Disposition: registry.FailureDisposition(admissionErr)})
 		}
 		if *reportPath != "" {
-			if err = registry.WriteJSON(*reportPath, report); err != nil {
+			if err = registry.WriteReport(*reportPath, report); err != nil {
 				return errors.Join(admissionErr, err)
 			}
 		}

@@ -6,7 +6,7 @@ toolchain go1.27.3
 
 tool actionlint.kjanat.dev/v2/cmd/actionlint
 
-require actionlint.kjanat.dev/v2 v2.0.0-20261024003928-16768627b0e9
+require actionlint.kjanat.dev/v2 v2.0.0-20261024080326-2fa382b984be
 
 require (
 	github.com/bmatcuk/doublestar/v4 v4.10.3 // indirect

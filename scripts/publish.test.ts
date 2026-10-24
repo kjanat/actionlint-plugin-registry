@@ -124,6 +124,23 @@ test('candidate receipt must describe the artifact being published and completed
 	try {
 		await writeFile(path, JSON.stringify(valid));
 		await verifyCandidateReceipt(path, { ...entry, kind: 'component' }, host, behavior);
+		for (const tag of ['1.0.0', 'v1.0.0']) {
+			for (const version of ['1.0.0', 'v1.0.0']) {
+				await writeFile(
+					path,
+					JSON.stringify({
+						...valid,
+						artifact: { ...valid.artifact, repository: 'https://github.com/OWNER/Repo', plugin_version: version },
+					}),
+				);
+				await verifyCandidateReceipt(
+					path,
+					{ ...entry, repository: 'Owner/repo', tag, kind: 'component' },
+					host,
+					behavior,
+				);
+			}
+		}
 		for (
 			const invalid of [
 				{ ...valid, offline: false },
@@ -164,11 +181,21 @@ test('candidate receipt must describe the artifact being published and completed
 test('GitHub publication downloads every uploaded byte before making a draft public', async () => {
 	// Exercise the actual HTTP publisher against a release service that stores upload bodies.
 	// Corrupt one download and require the draft to stay private; matching bytes may publish once.
-	for (const corrupt of [false, true]) {
+	for (
+		const { corrupt, resume } of [
+			{ corrupt: false, resume: false },
+			{ corrupt: true, resume: false },
+			{ corrupt: false, resume: true },
+		]
+	) {
 		const sample = await fixture();
 		const uploads = new Map<number, { name: string; bytes: Buffer }>();
 		let draft = true;
-		let created = false;
+		let created = resume;
+		let creations = 0;
+		if (resume) {
+			uploads.set(1, { name: 'SHA256SUMS', bytes: await readFile(join(sample.directory, 'SHA256SUMS')) });
+		}
 		let publishes = 0;
 		let downloads = 0;
 		const description = () => ({
@@ -183,17 +210,22 @@ test('GitHub publication downloads every uploaded byte before making a draft pub
 			if (url.pathname.includes('/git/ref/tags/')) {
 				return json(response, { ref: 'refs/tags/v1.0.0' });
 			}
+			if (url.pathname === '/graphql') {
+				const requestBody = JSON.parse((await body(request)).toString());
+				assert.deepEqual(requestBody.variables, { owner: 'owner', name: 'repo', tag: 'v1.0.0' });
+				return json(response, {
+					data: { repository: { release: created ? { databaseId: 7, tagName: 'v1.0.0' } : null } },
+				});
+			}
 			if (url.pathname.endsWith('/tags/v1.0.0')) {
-				return json(
-					response,
-					created ? description() : {},
-					created ? 200 : 404,
-				);
+				return json(response, {}, 404);
 			}
 			if (
 				url.pathname === '/repos/owner/repo/releases'
 				&& request.method === 'POST'
 			) {
+				assert.equal(created, false, 'An existing draft must be resumed, never recreated');
+				creations++;
 				const value: unknown = JSON.parse((await body(request)).toString());
 				assert.deepEqual(value, {
 					tag_name: 'v1.0.0',
@@ -224,7 +256,7 @@ test('GitHub publication downloads every uploaded byte before making a draft pub
 				return;
 			}
 			if (request.method === 'PATCH') {
-				assert.equal(downloads, uploads.size);
+				assert.ok(downloads >= uploads.size);
 				assert.deepEqual(JSON.parse((await body(request)).toString()), {
 					draft: false,
 				});
@@ -265,6 +297,7 @@ test('GitHub publication downloads every uploaded byte before making a draft pub
 					'Fix source tracking.',
 				);
 				assert.equal(publishes, 1);
+				assert.equal(creations, resume ? 0 : 1);
 				for (const file of uploads.values()) {
 					assert.deepEqual(
 						file.bytes,
@@ -292,9 +325,16 @@ test('authentication failures never create a release and redirects never receive
 	// before following its destination, otherwise an endpoint could disclose the publisher token.
 	let mutations = 0;
 	let captures = 0;
+	let graphQLError = false;
 	const remote = await server((request, response) => {
-		if (request.method !== 'GET') mutations++;
+		if (request.method !== 'GET' && request.url !== '/graphql') mutations++;
 		if (request.url === '/capture') captures++;
+		if (graphQLError && request.url?.includes('/git/ref/tags/')) {
+			return json(response, { ref: 'refs/tags/v1' });
+		}
+		if (graphQLError && request.url === '/graphql') {
+			return json(response, { data: { repository: { release: null } }, errors: [{ message: 'Not authorized' }] });
+		}
 		response.writeHead(request.url === '/redirect' ? 302 : 403, {
 			location: '/capture',
 		});
@@ -315,6 +355,17 @@ test('authentication failures never create a release and redirects never receive
 			(error) => error instanceof HTTPError && error.status === 403,
 		);
 		assert.equal(captures, 0);
+		assert.equal(mutations, 0);
+		graphQLError = true;
+		await assert.rejects(
+			new GitHubPublisher('secret', new HTTPClient(), remote.origin).publish(
+				'owner/repo',
+				'v1',
+				{ files: [], asset: 'plugin.wasm', sha256: 'a'.repeat(64) },
+				'',
+			),
+			/GitHub release lookup failed/,
+		);
 		assert.equal(mutations, 0);
 		await assert.rejects(
 			new HTTPClient().json(`${remote.origin}/redirect`, {

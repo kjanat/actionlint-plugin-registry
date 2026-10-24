@@ -17,10 +17,11 @@ export interface CheckOptions extends InstallationOptions {
 }
 export interface PublishedOptions extends InstallationOptions {
 	receipt: string;
+	tag: string;
 }
 type Source =
 	| { kind: 'candidate'; options: CheckOptions }
-	| { kind: 'published'; artifact: Record<string, unknown> };
+	| { kind: 'published'; artifact: Record<string, unknown>; version: string };
 
 function sha256(data: Buffer): string {
 	return createHash('sha256').update(data).digest('hex');
@@ -57,7 +58,7 @@ export async function checkCandidate(options: CheckOptions) {
 	return verifyInstallation(options, { kind: 'candidate', options });
 }
 
-export async function checkPublished(options: PublishedOptions) {
+export async function checkPublished(options: PublishedOptions, run = execute) {
 	await prepareReport(options, [options.receipt]);
 	const receipt = object(JSON.parse(await readFile(options.receipt, 'utf8')));
 	if (
@@ -75,10 +76,18 @@ export async function checkPublished(options: PublishedOptions) {
 	if (object(receipt.host).sha256 !== sha256(await readFile(options.actionlint))) {
 		throw new Error('Delivery host differs from the tested candidate');
 	}
+	const artifact = object(receipt.artifact);
+	if (
+		!/^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$/.test(options.tag)
+		|| options.tag.replace(/^v/u, '') !== string(artifact.plugin_version, 'version').replace(/^v/u, '')
+	) {
+		throw new Error('Delivery release tag differs from the tested candidate');
+	}
 	return verifyInstallation(options, {
 		kind: 'published',
-		artifact: object(receipt.artifact),
-	});
+		artifact,
+		version: options.tag,
+	}, run);
 }
 
 async function prepareReport(options: InstallationOptions, extraInputs: string[]) {
@@ -96,6 +105,7 @@ async function prepareReport(options: InstallationOptions, extraInputs: string[]
 async function verifyInstallation(
 	options: InstallationOptions,
 	source: Source,
+	run = execute,
 ) {
 	const root = await mkdtemp(join(tmpdir(), 'registry-candidate-'));
 	try {
@@ -115,12 +125,12 @@ async function verifyInstallation(
 		await chmod(binary, 0o700);
 		const hostDigest = sha256(await readFile(binary));
 		const hostVersion: unknown = JSON.parse(
-			await execute(binary, ['version', '--json'], project, env),
+			await run(binary, ['version', '--json'], project, env),
 		);
 		const fixture = resolve(options.fixture);
 		const fixtureDigest = sha256(await readFile(fixture));
 		const cli = fileURLToPath(new URL('./cli.ts', import.meta.url));
-		await execute(
+		await run(
 			process.execPath,
 			[
 				cli,
@@ -142,7 +152,7 @@ async function verifyInstallation(
 			: object(
 				object(
 					JSON.parse(
-						await execute(
+						await run(
 							resolve(source.options.registry),
 							[
 								'candidate',
@@ -164,7 +174,9 @@ async function verifyInstallation(
 			/^https:\/\//u,
 			'',
 		);
-		const version = `v${string(artifact.plugin_version, 'version').replace(/^v/u, '')}`;
+		const version = source.kind === 'published'
+			? source.version
+			: `v${string(artifact.plugin_version, 'version').replace(/^v/u, '')}`;
 		const install = ['plugin', 'install', name, '--version', version, '--json'];
 		const installEnvironment = { ...env };
 		if (source.kind === 'candidate') {
@@ -174,7 +186,7 @@ async function verifyInstallation(
 				delete installEnvironment[proxy];
 			}
 		}
-		await execute(binary, install, project, installEnvironment);
+		await run(binary, install, project, installEnvironment);
 		const lockPath = join(project, '.github', 'actionlint.plugins.lock.json');
 		const lock = await readFile(lockPath);
 		const plugins = object(JSON.parse(lock.toString('utf8'))).plugins;
@@ -188,7 +200,7 @@ async function verifyInstallation(
 				: pin.source === 'candidate')
 			|| pin.sha256 !== digest
 			|| pin.version !== version
-			|| pin.name !== name
+			|| string(pin.name, 'installed repository').toLowerCase() !== name.toLowerCase()
 			|| pin.contract !== artifact.contract
 			|| pin.plugin_id !== artifact.plugin_id
 		) {
@@ -197,7 +209,7 @@ async function verifyInstallation(
 		const probeFixture = async () =>
 			object(
 				JSON.parse(
-					await execute(
+					await run(
 						process.execPath,
 						[
 							cli,
@@ -220,7 +232,7 @@ async function verifyInstallation(
 		const checks = strings(first.checks);
 		const probe = strings(first.probe);
 		const positive = object(
-			JSON.parse(await execute(binary, probe, project, env, [0, 1])),
+			JSON.parse(await run(binary, probe, project, env, [0, 1])),
 		);
 		if (
 			positive.completed !== true

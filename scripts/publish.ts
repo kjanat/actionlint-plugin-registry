@@ -155,6 +155,34 @@ export class GitHubPublisher {
 		};
 	}
 
+	private async findRelease(repository: string, tag: string): Promise<Release | null> {
+		const [owner, name] = repository.split('/');
+		if (!owner || !name) throw new Error('Invalid repository');
+		// Drafts have pending tag names and cannot be found through REST's published-tag endpoint.
+		const reply = await this.http.json(`${this.api}/graphql`, {
+			method: 'POST',
+			headers: this.headers(),
+			body: JSON.stringify({
+				query:
+					'query ReleaseByTag($owner: String!, $name: String!, $tag: String!) { repository(owner: $owner, name: $name) { release(tagName: $tag) { databaseId tagName } } }',
+				variables: { owner, name, tag },
+			}),
+		});
+		if (reply.errors !== undefined && (!Array.isArray(reply.errors) || reply.errors.length !== 0)) {
+			throw new Error('GitHub release lookup failed');
+		}
+		const found = object(object(reply.data).repository).release;
+		if (found === null) return null;
+		const value = object(found);
+		if (value.tagName !== tag) throw new Error('GitHub returned a different release tag');
+		const id = integer(value.databaseId, 'release ID');
+		return release(
+			await this.http.json(`${this.api}/repos/${repository}/releases/${id}`, {
+				headers: this.headers(),
+			}),
+		);
+	}
+
 	private async compare(
 		repository: string,
 		existing: Release,
@@ -235,15 +263,8 @@ export class GitHubPublisher {
 		if (reference.ref !== `refs/tags/${tag}`) {
 			throw new Error('Release tag must already exist');
 		}
-		let existing: Release;
-		try {
-			existing = release(
-				await this.http.json(`${endpoint}/tags/${tag}`, {
-					headers: this.headers(),
-				}),
-			);
-		} catch (error) {
-			if (!(error instanceof HTTPError) || error.status !== 404) throw error;
+		let existing = await this.findRelease(repository, tag);
+		if (existing === null) {
 			existing = release(
 				await this.http.json(endpoint, {
 					method: 'POST',
@@ -322,10 +343,11 @@ export async function verifyCandidateReceipt(
 		|| receipt.missing_cache_rejected !== true
 		|| artifact.sha256 !== entry.sha256
 		|| artifact.kind !== entry.kind
-		|| artifact.repository !== `https://github.com/${entry.repository}`
-		|| artifact.plugin_version !== entry.tag.replace(/^v/, '')
+		|| text(artifact.repository, 'candidate repository').toLowerCase()
+			!== `https://github.com/${entry.repository}`.toLowerCase()
+		|| text(artifact.plugin_version, 'candidate version').replace(/^v/, '') !== entry.tag.replace(/^v/, '')
 		|| installation.sha256 !== entry.sha256
-		|| installation.version !== entry.tag
+		|| text(installation.version, 'installed version').replace(/^v/, '') !== entry.tag.replace(/^v/, '')
 		|| !digestPattern.test(text(host.sha256, 'candidate host digest'))
 		|| !digestPattern.test(text(fixture.sha256, 'candidate fixture digest'))
 		|| !Array.isArray(fixture.checks)

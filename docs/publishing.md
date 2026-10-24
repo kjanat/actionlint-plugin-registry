@@ -110,6 +110,8 @@ asset name are an error; reruns never replace assets.
 
 After OIDC submission, the action waits for `published`, then installs that exact
 version from the public catalogue and runs the same fixture and offline checks.
+The delivery check uses the actual release tag, including whether it starts with `v`.
+Repository capitalization and optional version prefixes do not change candidate identity.
 Upload `publication.json` even when the job fails: it records status and the
 validator run. `installation.json` is written after successful delivery verification.
 

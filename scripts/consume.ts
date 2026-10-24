@@ -3,6 +3,9 @@ import { join } from 'node:path';
 import { oidcToken, output, parseJSON, requestJSON, uuidValue } from '@/scripts/http.ts';
 
 const origin = 'https://registry.actionlint.kjanat.dev';
+const leaseLimit = 1024;
+// A compact admission/merge report holds one stored record (2 MiB), plus envelope.
+const reportLimit = 2 * 1024 * 1024 + 32 * 1024;
 
 interface Client {
 	token(): Promise<string>;
@@ -23,17 +26,17 @@ function exactKeys(value: Record<string, unknown>, expected: string[]): void {
 	}
 }
 
-async function readObject(path: string): Promise<Record<string, unknown>> {
+async function readObject(path: string, limit: number): Promise<Record<string, unknown>> {
 	const file = await open(path, 'r');
 	try {
-		const buffer = Buffer.alloc(1024 * 1024 + 1);
+		const buffer = Buffer.alloc(limit + 1);
 		let size = 0;
 		while (size < buffer.length) {
 			const { bytesRead } = await file.read(buffer, size, buffer.length - size);
 			if (bytesRead === 0) break;
 			size += bytesRead;
 		}
-		if (size > 1024 * 1024) throw new Error('JSON file exceeds 1 MiB.');
+		if (size > limit) throw new Error(`JSON file exceeds ${limit} bytes.`);
 		return object(parseJSON(buffer.subarray(0, size).toString('utf8')));
 	} finally {
 		await file.close();
@@ -43,7 +46,7 @@ async function readObject(path: string): Promise<Record<string, unknown>> {
 async function readLease(
 	path: string,
 ): Promise<{ id: string; lease_id: string }> {
-	const value = await readObject(path);
+	const value = await readObject(path, leaseLimit);
 	exactKeys(value, ['id', 'lease_id']);
 	return { id: uuidValue(value.id), lease_id: uuidValue(value.lease_id) };
 }
@@ -108,7 +111,7 @@ export async function recover(
 	for (const reportPath of reports) {
 		let report: Record<string, unknown>;
 		try {
-			report = await readObject(reportPath);
+			report = await readObject(reportPath, reportLimit);
 		} catch (error) {
 			if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
 				continue;

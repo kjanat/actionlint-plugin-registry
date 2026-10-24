@@ -69,6 +69,7 @@ const verifyInstallation = command('verify-installation')
 	.description(
 		'Verify delivery of the exact candidate through the production registry',
 	)
+	.flag('tag', flag.string().required().describe('Published release tag'))
 	.flag(
 		'actionlint',
 		flag.string().required().describe('Supported host executable'),

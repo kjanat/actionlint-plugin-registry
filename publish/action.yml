@@ -96,6 +96,7 @@ runs:
         ACTIONLINT: ${{ inputs.actionlint }}
         FIXTURE: ${{ inputs.fixture }}
         CANDIDATE_RECEIPT: ${{ inputs.candidate-receipt }}
+        RELEASE_TAG: ${{ inputs.tag }}
       run: bash "$ACTION_PATH/../scripts/validate.sh" bun "$ACTION_PATH/../scripts/cli.ts" verify-installation
         --actionlint "$ACTIONLINT" --fixture "$FIXTURE"
-        --receipt "$CANDIDATE_RECEIPT" --report installation.json
+        --receipt "$CANDIDATE_RECEIPT" --tag "$RELEASE_TAG" --report installation.json

@@ -293,10 +293,19 @@ func (i *Index) Add(e Entry) error {
 }
 
 func WriteJSON(path string, value any) (err error) {
+	return writeJSON(path, value, true)
+}
+
+func writeJSON(path string, value any, indent bool) (err error) {
 	if err = safePath(path); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(value, "", "  ")
+	var data []byte
+	if indent {
+		data, err = json.MarshalIndent(value, "", "  ")
+	} else {
+		data, err = json.Marshal(value)
+	}
 	if err != nil {
 		return err
 	}

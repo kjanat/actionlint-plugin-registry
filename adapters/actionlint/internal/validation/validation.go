@@ -20,7 +20,7 @@ import (
 	"actionlint.kjanat.dev/v2/rule"
 )
 
-const HostCommit = "16768627b0e9cefbb28781c5793ba9f5d9689c5c"
+const HostCommit = "2fa382b984bee67e014a112f4cbfba9604efb983"
 
 const callTimeout = 10 * time.Second
 
