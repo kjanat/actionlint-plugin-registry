@@ -21,13 +21,20 @@ func TestCataloguePageInstallationAndEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := readCataloguePage(t, directory)
+	if strings.Contains(page, "actionlint plugin install ") || strings.Contains(page, entry.Submission.Tag) {
+		t.Fatal("homepage lists release details instead of plugins")
+	}
+	pluginPath := "plugins/" + entry.Receipt.PluginKey() + "/index.html"
+	if !strings.Contains(page, `href="`+pluginPath+`"`) {
+		t.Fatal("homepage has no plugin detail link")
+	}
+	page = readPluginPage(t, directory, entry)
 	record := "plugins/" + entry.Receipt.PluginKey() + "/versions/" + key(entry.Submission.Tag) + ".json"
 	for _, text := range []string{
-		"<h3>example</h3>",
 		"actionlint plugin install example@" + entry.Submission.Tag,
 		`href="https://github.com/publisher/plugin"`,
 		`href="` + entry.PinnedURL() + `"`,
-		`href="` + record + `"`,
+		`href="versions/` + key(entry.Submission.Tag) + `.json"`,
 		"<dd>not collected</dd>",
 		"<code>" + entry.PinnedURL() + "</code>",
 		"<code>" + entry.Submission.SHA256 + "</code>",
@@ -61,7 +68,7 @@ func TestCataloguePageRevocationAndEscaping(t *testing.T) {
 	if err := Export(index, directory, []ReleaseStatus{status}, nil); err != nil {
 		t.Fatal(err)
 	}
-	page := readCataloguePage(t, directory)
+	page := readPluginPage(t, directory, entry)
 	if strings.Count(page, `class="state revoked"`) != 2 || strings.Contains(page, "actionlint plugin install ") {
 		t.Fatal("revoked bytes were offered for installation under another tag")
 	}
@@ -86,11 +93,14 @@ func TestCataloguePageWithoutAliasAndEmptyRegistry(t *testing.T) {
 			}
 			page := readCataloguePage(t, directory)
 			if empty {
-				if !strings.Contains(page, "No releases published yet.") || !strings.Contains(page, "Publish your first plugin") {
+				if !strings.Contains(page, "No plugins published yet.") || !strings.Contains(page, "Publish your first plugin") {
 					t.Fatal("empty registry has no publication guidance")
 				}
-			} else if !strings.Contains(page, "actionlint plugin install github.com/"+entry.Submission.Repository+"@"+entry.Submission.Tag) {
-				t.Fatal("unaliased plugin lost its canonical installation reference")
+			} else {
+				page = readPluginPage(t, directory, entry)
+				if !strings.Contains(page, "actionlint plugin install github.com/"+entry.Submission.Repository+"@"+entry.Submission.Tag) {
+					t.Fatal("unaliased plugin lost its canonical installation reference")
+				}
 			}
 		})
 	}
@@ -112,7 +122,7 @@ func TestCataloguePageInstallableStatuses(t *testing.T) {
 			if err := Export(index, directory, []ReleaseStatus{status}, nil); err != nil {
 				t.Fatal(err)
 			}
-			page := readCataloguePage(t, directory)
+			page := readPluginPage(t, directory, entry)
 			installable := state == StatusActive || state == StatusDeprecated
 			if strings.Contains(page, "actionlint plugin install ") != installable {
 				t.Fatalf("install command disagrees with %s status", state)
@@ -127,6 +137,15 @@ func TestCataloguePageInstallableStatuses(t *testing.T) {
 func readCataloguePage(t *testing.T, directory string) string {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(directory, "index.html"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+func readPluginPage(t *testing.T, directory string, entry Entry) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(directory, "plugins", entry.Receipt.PluginKey(), "index.html"))
 	if err != nil {
 		t.Fatal(err)
 	}

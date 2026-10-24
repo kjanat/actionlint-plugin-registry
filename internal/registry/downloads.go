@@ -85,19 +85,27 @@ func collectDownloads(ctx context.Context, index Index, counter downloadCounter)
 }
 
 func (s DownloadSnapshot) display(entry Entry) string {
-	for _, observation := range s.Releases {
+	if observation := s.observation(entry); observation != nil {
+		if observation.Count != nil {
+			return fmt.Sprint(*observation.Count)
+		}
+		return observation.Status
+	}
+	return "unavailable"
+}
+
+func (s DownloadSnapshot) observation(entry Entry) *DownloadObservation {
+	for i := range s.Releases {
+		observation := &s.Releases[i]
 		if observation.Provider == entry.Submission.Provider &&
 			observation.RepositoryID == entry.RepositoryID &&
 			observation.Version == entry.Submission.Tag &&
 			observation.AssetID == entry.AssetID &&
 			observation.SHA256 == entry.Submission.SHA256 {
-			if observation.Count != nil {
-				return fmt.Sprint(*observation.Count)
-			}
-			return observation.Status
+			return observation
 		}
 	}
-	return "unavailable"
+	return nil
 }
 
 // ExportWithDownloadCounts keeps network-derived statistics separate from the

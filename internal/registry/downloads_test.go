@@ -84,6 +84,7 @@ func TestDownloadSnapshotsPreserveUnknownsAndRecords(t *testing.T) {
 	unavailable.Submission.Tag = "v2"
 	unsupported := entry
 	unsupported.Submission.Provider = "gitlab"
+	unsupported.Receipt.Identity.Issuer = "https://gitlab.com"
 	index := Index{SchemaVersion: 1, Entries: []Entry{entry, unavailable, unsupported}}
 	calls := 0
 	snapshot := collectDownloads(t.Context(), index, counterFunc(func(_ context.Context, e Entry) (int64, error) {
@@ -132,12 +133,9 @@ func TestDownloadSnapshotsPreserveUnknownsAndRecords(t *testing.T) {
 	if err = json.Unmarshal(data, &decoded); err != nil || !reflect.DeepEqual(decoded, snapshot) {
 		t.Fatalf("snapshot round trip failed: %v", err)
 	}
-	html, err := os.ReadFile(filepath.Join(after, "index.html"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	html := readCataloguePage(t, after) + readPluginPage(t, after, entry) + readPluginPage(t, after, unsupported)
 	for _, text := range []string{"<dd>0</dd>", "<dd>unavailable</dd>", "<dd>unsupported</dd>", "downloads.json", "unique users", "Observed "} {
-		if !strings.Contains(string(html), text) {
+		if !strings.Contains(html, text) {
 			t.Errorf("missing rendered %q", text)
 		}
 	}
