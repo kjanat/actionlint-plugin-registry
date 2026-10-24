@@ -82,7 +82,9 @@ test('static fallback, browser directory and locale behavior against 100 public 
 						await page.locator('.pagination').scrollIntoViewIfNeeded();
 						await page.screenshot({ path: join(reviewDirectory, '100-plugins-mobile-pagination.png') });
 					}
+					await page.getByRole('combobox').focus();
 					await page.getByRole('combobox').selectOption('name');
+					expect(await page.getByRole('combobox').evaluate(select => document.activeElement === select)).toBe(true);
 					const date = await page.locator('.plugin-card').first().locator('time').innerText();
 					expect(date).toContain(locale === 'nl-NL' ? '29 mrt' : 'Mar 28');
 					await page.locator('.help summary').click();
@@ -101,11 +103,33 @@ test('static fallback, browser directory and locale behavior against 100 public 
 			document.querySelector('input') instanceof HTMLInputElement
 			&& !document.querySelector('input')?.hasAttribute('disabled')
 		);
+		await page.getByRole('link', { name: 'Next', exact: true }).scrollIntoViewIfNeeded();
+		const firstPageScroll = await page.evaluate(() => scrollY);
 		await page.getByRole('link', { name: 'Next', exact: true }).click();
 		expect(await page.locator('.plugin-card').count()).toBe(20);
 		expect(await page.locator('.plugin-card h2').first().innerText()).toBe('Plugin 079');
+		async function expectResultsVisible() {
+			const firstResult = await page.locator('.plugin-card').first().boundingBox();
+			if (!firstResult) throw new Error('Missing first result');
+			expect(firstResult.y).toBeGreaterThanOrEqual(0);
+			expect(firstResult.y + firstResult.height).toBeLessThanOrEqual(await page.evaluate(() => innerHeight));
+			expect(await page.locator('.result-count').evaluate(result => document.activeElement === result)).toBe(true);
+		}
+		await expectResultsVisible();
+		await page.keyboard.press('Tab');
+		expect(await page.evaluate(() => document.activeElement?.textContent)).toBe('Plugin 079');
+		await page.getByRole('link', { name: 'Next', exact: true }).scrollIntoViewIfNeeded();
+		await page.getByRole('link', { name: 'Next', exact: true }).focus();
+		const secondPageScroll = await page.evaluate(() => scrollY);
+		await page.keyboard.press('Enter');
+		expect(await page.locator('.plugin-card h2').first().innerText()).toBe('Plugin 059');
+		await expectResultsVisible();
+		await page.goBack();
+		expect(await page.locator('.plugin-card h2').first().innerText()).toBe('Plugin 079');
+		await page.waitForFunction(expected => Math.abs(scrollY - expected) < 2, secondPageScroll);
 		await page.goBack();
 		expect(await page.locator('.plugin-card h2').first().innerText()).toBe('Plugin 099');
+		await page.waitForFunction(expected => Math.abs(scrollY - expected) < 2, firstPageScroll);
 		await page.getByRole('searchbox').fill('Plugin 042');
 		await page.getByRole('button', { name: 'Search', exact: true }).click();
 		expect(await page.locator('.plugin-card').count()).toBe(1);

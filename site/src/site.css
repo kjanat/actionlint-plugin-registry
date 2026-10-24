@@ -156,6 +156,7 @@ button:disabled, input:disabled {
 	font-weight: 600;
 }
 .result-count {
+	scroll-margin-block-start: 1rem;
 	font-size: 0.85rem;
 	color: var(--muted);
 	margin: 1rem 0 0.5rem;

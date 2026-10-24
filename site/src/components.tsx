@@ -112,11 +112,13 @@ export function Layout(
 	);
 }
 
+export type NavigationSource = 'controls' | 'pagination';
+
 interface DirectoryProps {
 	root: string;
 	plugins: PluginSummary[];
 	state: DirectoryState;
-	onNavigate?: (state: DirectoryState) => void;
+	onNavigate?: (state: DirectoryState, source: NavigationSource) => void;
 }
 
 function plainClick(event: MouseEvent): boolean {
@@ -139,7 +141,7 @@ export function Directory({ root, plugins, state, onNavigate }: DirectoryProps) 
 					if (!onNavigate) return;
 					event.preventDefault();
 					const data = new FormData(event.currentTarget);
-					onNavigate({ ...state, query: String(data.get('q') ?? '').trim(), page: 1 });
+					onNavigate({ ...state, query: String(data.get('q') ?? '').trim(), page: 1 }, 'controls');
 				}}
 			>
 				<label class='search'>
@@ -160,7 +162,7 @@ export function Directory({ root, plugins, state, onNavigate }: DirectoryProps) 
 							onChange={event => {
 								const sort = event.currentTarget.value;
 								if (sort === 'name' || sort === 'downloads' || sort === 'updated') {
-									onNavigate?.({ ...state, sort, page: 1 });
+									onNavigate?.({ ...state, sort, page: 1 }, 'controls');
 								}
 							}}
 						>
@@ -200,7 +202,7 @@ export function Directory({ root, plugins, state, onNavigate }: DirectoryProps) 
 					</nav>
 				</>
 			)}
-			<p class='result-count' role='status'>
+			<p class='result-count' role='status' tabIndex={-1}>
 				{selected.count
 					? `${(selected.page - 1) * pageSize + 1}–${
 						Math.min(selected.page * pageSize, selected.count)
@@ -248,7 +250,7 @@ export function Directory({ root, plugins, state, onNavigate }: DirectoryProps) 
 							onClick={event => {
 								if (onNavigate && plainClick(event)) {
 									event.preventDefault();
-									onNavigate({ ...state, page: selected.page - 1 });
+									onNavigate({ ...state, page: selected.page - 1 }, 'pagination');
 								}
 							}}
 						>
@@ -265,7 +267,7 @@ export function Directory({ root, plugins, state, onNavigate }: DirectoryProps) 
 								onClick={event => {
 									if (onNavigate && plainClick(event)) {
 										event.preventDefault();
-										onNavigate({ ...state, page });
+										onNavigate({ ...state, page }, 'pagination');
 									}
 								}}
 							>
@@ -280,7 +282,7 @@ export function Directory({ root, plugins, state, onNavigate }: DirectoryProps) 
 							onClick={event => {
 								if (onNavigate && plainClick(event)) {
 									event.preventDefault();
-									onNavigate({ ...state, page: selected.page + 1 });
+									onNavigate({ ...state, page: selected.page + 1 }, 'pagination');
 								}
 							}}
 						>

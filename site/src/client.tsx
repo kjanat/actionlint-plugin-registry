@@ -1,7 +1,8 @@
 /** @jsxImportSource preact */
 import { render } from 'preact';
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { Directory } from '@/src/components.tsx';
+import type { NavigationSource } from '@/src/components.tsx';
 import { readState, selectPlugins, stateLink } from '@/src/directory.ts';
 import type { DirectoryState } from '@/src/directory.ts';
 import { searchIndexSchema } from '@/src/schema.ts';
@@ -10,14 +11,28 @@ import { localize } from '@/src/time.ts';
 
 function BrowserDirectory({ plugins, base }: { plugins: PluginSummary[]; base: URL }) {
 	const [state, setState] = useState(readState(new URL(location.href)));
-	function navigate(next: DirectoryState) {
+	const focusResults = useRef(false);
+	function navigate(next: DirectoryState, source: NavigationSource) {
 		const selected = selectPlugins(plugins, next);
 		const normalized = { ...next, page: selected.page };
 		history.pushState(null, '', stateLink(base.href, normalized));
+		focusResults.current = source === 'pagination';
 		setState(normalized);
 	}
+	useLayoutEffect(() => {
+		if (!focusResults.current) return;
+		focusResults.current = false;
+		const result = document.querySelector('#directory .result-count');
+		if (result instanceof HTMLElement) {
+			result.focus({ preventScroll: true });
+			result.scrollIntoView({ block: 'start' });
+		}
+	}, [state]);
 	useEffect(() => {
-		const back = () => setState(readState(new URL(location.href)));
+		const back = () => {
+			focusResults.current = false;
+			setState(readState(new URL(location.href)));
+		};
 		addEventListener('popstate', back);
 		return () => removeEventListener('popstate', back);
 	}, []);
