@@ -2,6 +2,7 @@
   "name": "@kjanat-actionlint/registry-tools",
   "private": true,
   "type": "module",
+  "workspace": ["./worker/"],
   "scripts": {
     "test": "bun test scripts",
     "typecheck": "tsc --noEmit"

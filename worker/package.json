@@ -6,13 +6,13 @@
     "#*": "./src/*.ts"
   },
   "scripts": {
-    "lint": "biome lint src test scripts --error-on-warnings",
-    "test": "bun test",
-    "typecheck": "tsc --noEmit",
-    "prepare": "wrangler types",
     "check:bundle": "wrangler deploy --dry-run --outdir .dry-run",
     "deploy": "wrangler deploy",
-    "test:runtime": "node scripts/runtime-dispatch.ts && node scripts/runtime-recovery.ts"
+    "lint": "biome lint --error-on-warnings",
+    "prepare": "wrangler types",
+    "test": "bun test",
+    "test:runtime": "node scripts/runtime-dispatch.ts && node scripts/runtime-recovery.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "jose": "6.2.13"

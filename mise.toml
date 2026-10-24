@@ -1,10 +1,14 @@
 [tools]
 node                                      = "26.12.1"
-"github:oven-sh/bun"                      = { prefix = "1.4", version_prefix = "bun-v" }
+bun                                       = "latest"
 "github:kjanat/dprint"                    = "latest"
 "github:kjanat/runner"                    = "latest"
 "github:kjanat/shellcheck-rs"             = { version = "latest", rename_exe = "shellcheck" }
 "go:actionlint.kjanat.dev/cmd/actionlint" = { version = "fuck-it", auto_update = true, depends = ["go", "github:kjanat/shellcheck-rs"] }
+
+[settings]
+idiomatic_version_file_enable_tools            = ["node", "bun", "go"]
+idiomatic_version_file_ignore_minimum_versions = true
 
 [wrappers]
 [wrappers.wrangler]
