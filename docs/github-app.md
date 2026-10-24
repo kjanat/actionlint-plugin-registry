@@ -79,5 +79,21 @@ deployment for the same App commit. Maintainer pushes still deploy, including
 changes limited to registry records. Explicit calls from admission and manual
 deployments remain enabled.
 
+Admission reads the current `registry/plugins` registrations and writes only the
+new record to `candidate/plugins`. Publication checks that delta against the
+latest checkout before committing. An identity or immutable-version conflict
+rejects the submission with a report linked to its validator run.
+
+When a build, upload, commit or deployment fails, the recovery job returns the
+claim for retry after 60 seconds, then 120 seconds on the next failure. Three
+failed attempts end in `failed`; a fresh authenticated submission of the same
+metadata starts another bounded attempt sequence. Cleanup requires the exact
+lease and authenticated workflow run that claimed it. A previous run cannot
+complete or release a newer lease. If cleanup itself cannot run, the one-hour
+lease expiry remains the fallback.
+
+The status API includes `validator_run` while validating and after failure.
+Queued retries include `retry_at`, the next eligible claim time.
+
 For GitHub's authentication details, see [installation access tokens](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app)
 and [the official App-token action](https://github.com/actions/create-github-app-token).

@@ -1,5 +1,5 @@
 [tools]
-node                                    = "26.12.1"
+node                                      = "26.12.1"
 "github:oven-sh/bun"                      = { prefix = "1.4", version_prefix = "bun-v" }
 "github:kjanat/dprint"                    = "latest"
 "github:kjanat/runner"                    = "latest"
@@ -19,12 +19,11 @@ env     = { RUNNER_DIR = "worker" }
 
 [tasks.setup]
 description = "Install project dependencies."
-dir         = "worker"
-run         = "bun install --frozen-lockfile"
+run         = ["bun install --frozen-lockfile", "bun install --cwd worker --frozen-lockfile"]
 
 [tasks.check]
 description = "Run project checks."
-depends     = ["test:go", "lint:go", "check:adapter", "test:python", "check:worker"]
+depends     = ["test:go", "lint:go", "check:adapter", "check:cli", "check:worker"]
 
 [tasks."test:go"]
 run = "go test ./..."
@@ -36,12 +35,18 @@ run = "golangci-lint run --allow-parallel-runners"
 dir = "adapters/actionlint"
 run = ["go test ./...", "golangci-lint run --allow-parallel-runners"]
 
-[tasks."test:python"]
-run = 'python -B -m unittest discover -s scripts -p "test_*.py"'
+[tasks."check:cli"]
+run = ["bun run typecheck", "bun run test"]
 
 [tasks."check:worker"]
 dir = "worker"
 run = ["bun run lint", "bun run typecheck", "bun test", "bun run check:bundle", "bun run test:runtime"]
+
+[tasks."deploy:worker"]
+description = "Check and deploy the registry Worker to Cloudflare."
+depends     = ["check:worker"]
+dir         = "worker"
+run         = "bun run deploy"
 
 [tasks.modernize]
 run = "go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -fix ./..."

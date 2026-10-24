@@ -43,6 +43,20 @@ budget; assets not observed within that budget are marked unavailable.
 
 ## Publishing
 
+### Check a candidate
+
+Check packaged candidate bytes before creating a tag or release. The shared
+[candidate check](docs/publishing.md) creates a temporary catalogue, installs the
+plugin with the real actionlint CLI, runs your behavioral fixture, then checks
+offline execution and missing-cache failure. It writes a receipt for the exact
+artifact, host and fixture. Nothing enters the public registry during this check.
+
+Use [`check/action.yml`](check/action.yml) in PR CI and
+[`publish/action.yml`](publish/action.yml) in the tag workflow. Publication verifies
+the receipt and package, uploads the same bytes, waits for registry admission and
+checks delivery with the same fixture. Keep build and plugin-specific assertions
+in the plugin repository; the registry owns upload, submission and recovery tooling.
+
 Publish a tagged release with an embedded `actionlint.plugin` custom section.
 The [metadata policy](docs/metadata.md) describes both supported WASM formats.
 Submit the SHA-256 checksum of the file you distribute. For `.wasm.gz` files,
@@ -53,8 +67,13 @@ by the tag against the hosting provider's API.
 
 ### GitHub Actions
 
-Enable immutable releases. Upload assets to a draft release before publishing it.
-Submit the release from a workflow running on that tag in the same public repository:
+The shared publish action requires `contents: write` and `id-token: write` in a job
+running on the release tag. Enable immutable releases in the repository first.
+Its [inputs and workflow requirements](docs/publishing.md#github-actions) cover candidate
+receipts, package directories and host/fixture selection.
+
+If another workflow already publishes the release, the root action submits that
+existing release using only `contents: read` and `id-token: write`:
 
 ```yaml
 on:
@@ -107,7 +126,8 @@ register:
   rules:
     - if: $CI_COMMIT_TAG
   script:
-    - python3 registry-client/scripts/submit.py
+    - bun install --cwd registry-client --frozen-lockfile
+    - bun registry-client/scripts/cli.ts submit
   variables:
     PLUGIN_PROVIDER: gitlab
     PLUGIN_REPOSITORY: $CI_PROJECT_PATH
@@ -116,9 +136,8 @@ register:
     PLUGIN_KIND: component
 ```
 
-Set `PLUGIN_SHA256` to the checksum produced by the release build. Copy
-`scripts/submit.py` and `scripts/registry_api.py` from a reviewed registry commit
-into `registry-client/scripts/`.
+Set `PLUGIN_SHA256` to the checksum produced by the release build. Check out a
+reviewed registry commit in `registry-client/` and install Bun before running the job.
 Keep the ID token masked; never print it or use shell tracing. The client reads it
 from its environment. No long-lived registry credential is required.
 
@@ -140,8 +159,8 @@ publishers do not need individual approval.
 2. The Worker verifies the token's signature, issuer, audience, timestamps, and project and tag claims.
 3. A SQLite Durable Object records the request and a notification in the same transaction. It prevents the token or version from being reused for a different submission.
 4. The registry's GitHub App starts the admission workflow. That workflow authenticates with OIDC and claims a queued request. A scheduled run every five minutes provides a fallback.
-5. A job with read-only repository access downloads the submitted file and verifies its checksum, container framing, and embedded discovery metadata. It does not execute the plugin.
-6. A separate job commits the accepted records using the registry App's bot identity. GitHub Pages then publishes the generated catalogues.
+5. A job with read-only repository access downloads the file and verifies its checksum, metadata and identity against existing registrations. It writes a separate candidate delta without executing the plugin.
+6. A separate job checks that delta against the latest registrations and commits the accepted records using the registry App's bot identity. GitHub Pages then publishes the generated catalogues.
 7. The workflow marks the submission `published` only after Pages succeeds.
 
 The registry uses its own GitHub App to start admission and publish accepted
@@ -153,13 +172,15 @@ Opening an issue or adding a repository to the discovery list does not authorize
 publication. Running the workflow manually processes existing authorized requests.
 
 Use `GET /v1/submissions/<submission-id>` to check a request's status. Proven invalid
-artifact content or identity is rejected immediately. Infrastructure and upstream
-failures leave the claim eligible for retry. After three expired attempts, the
-request becomes `failed`. The publisher can retry that failed request by submitting
-identical metadata with a fresh OIDC token; the original receipt is preserved and
-the recovery is recorded. Rejected and published requests remain terminal. Failure
-statuses include a safe explanation and a link to the validator run. Retrying cannot
-replace an accepted version with different bytes.
+artifact content or identity is rejected immediately, including conflicts found
+during publication. Infrastructure failures return the claim for retry after 60
+seconds, then 120 seconds. After three failed attempts, the request becomes `failed`.
+Resubmitting identical metadata with fresh OIDC starts another bounded sequence
+under the original submission ID. Rejected and published requests are terminal.
+Status responses expose the validator run while work is active and `retry_at` when
+queued again. If cleanup cannot run, the one-hour lease expiry is the fallback.
+The shared waiter retries transient HTTP failures within its deadline. Retrying
+cannot replace accepted bytes.
 The [Worker documentation](worker/README.md) explains authentication, quotas, and
 how claims expire.
 
@@ -231,6 +252,11 @@ go -C adapters/actionlint build -o ../../actionlint-checker .
 go run ./cmd/registry check --checker ./actionlint-checker \
   --artifact plugin.wasm --plugin github.com/owner/plugin --version v1.0.0
 ```
+
+Omit `--plugin` and `--version` to check unpublished bytes without creating a tag
+or accepted version. The report is an observation of that artifact and host; it
+does not authorize publication. The full candidate check additionally exercises
+installation and the plugin's behavioral fixture through the supported CLI.
 
 Reports are independent immutable files under
 `registry/compatibility/<artifact-sha256>/<report-sha256>.json`. They identify the

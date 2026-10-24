@@ -71,6 +71,7 @@ test('claims have owner/run-specific leases; completion is idempotent', () => {
 	const accepted = inbox.submit(s, auth, 'hash', 100);
 	const claim = inbox.claim(identity, 101).claim;
 	if (!claim) throw new Error('missing claim');
+	expect(inbox.status(accepted.id).validator_run).toBe('https://github.com/acme/plugin/actions/runs/30/attempts/1');
 	expect(inbox.claim(identity, 102).claim).toBeNull();
 	expect(() =>
 		inbox.complete(
@@ -106,6 +107,38 @@ test('claims have owner/run-specific leases; completion is idempotent', () => {
 		id: accepted.id,
 		status: 'published',
 	});
+});
+
+// Exercise retry backoff, repeated cleanup and the retry cap through Worker SQL.
+// A failed run must release its claim without giving stale validators authority.
+test('failed runs retry after bounded backoff and stale owners cannot complete', () => {
+	const db = new Database(':memory:');
+	const inbox = store(db);
+	const accepted = inbox.submit(s, auth, 'hash', 100);
+	const first = inbox.claim(identity, 101).claim;
+	if (!first) throw new Error('missing first claim');
+	expect(() => inbox.retry(accepted.id, { ...identity, run_id: '31:1' }, first.lease_id, 102)).toThrow('lease owner');
+	const retried = inbox.retry(accepted.id, identity, first.lease_id, 102);
+	expect(retried.status).toBe('pending');
+	expect(retried.retry_at).toBe(new Date(162000).toISOString());
+	expect(retried.validator_run).toBe('https://github.com/acme/plugin/actions/runs/30/attempts/1');
+	expect(inbox.retry(accepted.id, identity, first.lease_id, 103)).toEqual(retried);
+	expect(inbox.claim(identity, 161).claim).toBeNull();
+	expect(db.query('SELECT next_attempt FROM dispatch_outbox').all()).toEqual([{ next_attempt: 162 }]);
+	const second = inbox.claim({ ...identity, run_id: '31:1' }, 162).claim;
+	if (!second) throw new Error('missing second claim');
+	expect(() => inbox.retry(accepted.id, identity, first.lease_id, 163)).toThrow('lease owner');
+	expect(() => inbox.complete(accepted.id, identity, first.lease_id, 'published', undefined, 163)).toThrow(
+		'lease owner',
+	);
+	expect(inbox.retry(accepted.id, { ...identity, run_id: '31:1' }, second.lease_id, 163).retry_at)
+		.toBe(new Date(283000).toISOString());
+	expect(inbox.claim(identity, 282).claim).toBeNull();
+	const third = inbox.claim(identity, 283).claim;
+	if (!third) throw new Error('missing third claim');
+	expect(inbox.retry(accepted.id, identity, third.lease_id, 284).status).toBe('failed');
+	expect(inbox.claim(identity, 10000).claim).toBeNull();
+	expect(db.query('SELECT submission_id FROM dispatch_outbox').all()).toEqual([]);
 });
 
 test('expired lease cannot complete; three expired attempts terminate', () => {

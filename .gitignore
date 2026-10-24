@@ -3,6 +3,7 @@
 /registry-cli.exe
 /dist/
 /reports/
+/node_modules/
 /.tmp/
 /worker/worker-configuration.d.ts
 

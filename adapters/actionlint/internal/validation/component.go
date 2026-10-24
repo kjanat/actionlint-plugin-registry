@@ -7,25 +7,34 @@ import (
 	"fmt"
 	"slices"
 
-	"actionlint.kjanat.dev/analysis"
-	"actionlint.kjanat.dev/analyzer"
-	"actionlint.kjanat.dev/diagnostic"
-	"actionlint.kjanat.dev/plugin"
-	"actionlint.kjanat.dev/rule"
+	"actionlint.kjanat.dev/v2/analysis"
+	"actionlint.kjanat.dev/v2/analyzer"
+	"actionlint.kjanat.dev/v2/diagnostic"
+	"actionlint.kjanat.dev/v2/plugin"
+	"actionlint.kjanat.dev/v2/rule"
 )
 
 const sampleWorkflow = "name: Registry smoke\non: push\njobs:\n  smoke:\n    runs-on: ubuntu-latest\n    steps:\n      - id: sample\n        shell: bash\n        run: |\n          printf '%s\\n' $value\n"
 const emptyWorkflow = "name: Registry empty\non: push\njobs: {}\n"
 const samplePath = "registry-smoke.yml"
 
-func validateComponent(ctx context.Context, path string, declared *componentDeclaration) (result Result, err error) {
+func validateComponent(ctx context.Context, path string, metadata embeddedMetadata) (result Result, err error) {
 	component, err := plugin.Load(ctx, path, plugin.Options{Timeout: callTimeout, MemoryPages: 1024})
 	if err != nil {
 		return result, err
 	}
 	defer func() { err = errors.Join(err, component.Close(context.WithoutCancel(ctx))) }()
+	switch metadata.Interface {
+	case scriptInterface:
+		return validateScriptComponent(ctx, component)
+	case runnerInterface:
+		return validateRunnerComponent(ctx, component, metadata)
+	}
+	if !component.HasAnalyzer() {
+		return result, errors.New("component does not implement its declared analyzer role")
+	}
 	descriptor := component.Descriptor()
-	if err := declared.matches(descriptor); err != nil {
+	if err := metadata.Descriptor.matches(descriptor); err != nil {
 		return result, err
 	}
 	names, err := ruleNames([]rule.Descriptor{descriptor.Descriptor})

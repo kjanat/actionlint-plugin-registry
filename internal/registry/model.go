@@ -273,11 +273,11 @@ func (i *Index) Add(e Entry) error {
 			continue
 		}
 		if pluginFor(old) != pluginFor(e) {
-			return errors.New("registered publisher or plugin identity changed")
+			return reject("registered publisher or plugin identity changed")
 		}
 		if old.Submission.Tag == e.Submission.Tag {
 			if old.Submission != e.Submission || old.ReleaseID != e.ReleaseID || old.AssetID != e.AssetID || old.Commit != e.Commit || old.URL != e.URL || old.UpstreamImmutable != e.UpstreamImmutable {
-				return errors.New("accepted version is immutable; refusing replacement")
+				return reject("accepted version is immutable; refusing replacement")
 			}
 			return nil
 		}
@@ -293,10 +293,19 @@ func (i *Index) Add(e Entry) error {
 }
 
 func WriteJSON(path string, value any) (err error) {
+	return writeJSON(path, value, true)
+}
+
+func writeJSON(path string, value any, indent bool) (err error) {
 	if err = safePath(path); err != nil {
 		return err
 	}
-	data, err := json.MarshalIndent(value, "", "  ")
+	var data []byte
+	if indent {
+		data, err = json.MarshalIndent(value, "", "  ")
+	} else {
+		data, err = json.Marshal(value)
+	}
 	if err != nil {
 		return err
 	}

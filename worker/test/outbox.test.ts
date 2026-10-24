@@ -204,11 +204,13 @@ test('an alarm failure does not consume a dispatch attempt', async () => {
 });
 
 test('failed dispatch logs only one sanitized classification and leaves its retry durable', async () => {
-	for (const failure of [
-		new DispatchFailure({ code: 'http-error', stage: 'workflow-dispatch', status: 403 }),
-		new DispatchFailure({ code: 'invalid', stage: 'signing' }),
-		new Error('secret token, private key and signed request URL'),
-	]) {
+	for (
+		const failure of [
+			new DispatchFailure({ code: 'http-error', stage: 'workflow-dispatch', status: 403 }),
+			new DispatchFailure({ code: 'invalid', stage: 'signing' }),
+			new Error('secret token, private key and signed request URL'),
+		]
+	) {
 		const { inbox, outbox } = fixture();
 		const accepted = inbox.submit(input, auth, 'hash', 100);
 		const messages: unknown[] = [];

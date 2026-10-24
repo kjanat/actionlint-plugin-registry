@@ -82,7 +82,8 @@ export class PublicationInbox extends DurableObject<Env> {
 			const completionID = /^\/v1\/claims\/([0-9a-f-]{36})\/complete$/u.exec(
 				url.pathname,
 			)?.[1];
-			if (url.pathname === '/v1/claims' || completionID) {
+			const retryID = /^\/v1\/claims\/([0-9a-f-]{36})\/retry$/u.exec(url.pathname)?.[1];
+			if (url.pathname === '/v1/claims' || completionID || retryID) {
 				const identity = consumer(
 					await verify(
 						bearer(request),
@@ -90,6 +91,17 @@ export class PublicationInbox extends DurableObject<Env> {
 					),
 					this.env,
 				);
+				if (retryID) {
+					const input = object(await body(request));
+					exactKeys(input, ['lease_id']);
+					return json(
+						await submitWithWakeup(
+							(timestamp) => this.scheduleAlarm(timestamp),
+							now,
+							() => this.store.retry(retryID, identity, text(input.lease_id, 36), now),
+						),
+					);
+				}
 				if (!completionID) return json(this.store.claim(identity, now));
 				const input = object(await body(request));
 				exactKeys(input, ['lease_id', 'status', 'detail']);
