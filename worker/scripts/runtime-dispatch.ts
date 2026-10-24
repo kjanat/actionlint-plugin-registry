@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { generateKeyPairSync } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { Miniflare } from 'miniflare';
+import { Miniflare, Response } from 'miniflare';
 import type { Request as RuntimeRequest } from 'miniflare';
 
 const bundle = await readFile('.dry-run/index.js', 'utf8');

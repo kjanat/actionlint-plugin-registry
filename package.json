@@ -2,16 +2,38 @@
   "name": "@kjanat-actionlint/registry-tools",
   "private": true,
   "type": "module",
-  "workspace": ["./worker/"],
+  "workspaces": {
+    "packages": ["site", "worker"],
+    "catalog": {
+      "@kjanat/dreamcli": "4.2.0",
+      "@types/bun": "1.4.4",
+      "@types/node": "26.6.5",
+      "typescript": "7.0.2"
+    },
+    "catalogs": {
+      "site": {
+        "playwright": "1.64.1",
+        "preact": "11.0.2",
+        "preact-render-to-string": "6.8.1",
+        "zod": "4.6.7"
+      },
+      "worker": {
+        "@biomejs/biome": "2.6.3",
+        "jose": "6.2.13",
+        "miniflare": "5.20261019.2-beta",
+        "wrangler": "4.152.0"
+      }
+    }
+  },
   "scripts": {
     "test": "bun test scripts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@kjanat/dreamcli": "4.2.0"
+    "@kjanat/dreamcli": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "26.6.5",
-    "typescript": "7.0.2"
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
   }
 }

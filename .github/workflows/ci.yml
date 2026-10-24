@@ -27,12 +27,23 @@ jobs:
         with: { version-file: "${{ github.workspace }}/.tool-versions", skip-cache: true }
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with: { bun-version-file: ".tool-versions" }
-      - name: Install registry CLI dependencies
+      - name: Install workspace dependencies
         run: bun install --frozen-lockfile
       - name: Check registry CLI types
         run: bun run typecheck
       - name: Test publisher and recovery commands
         run: bun run test
+      - name: Install Chromium for catalogue browser tests
+        run: bun run --cwd site browser:install
+      - name: Check catalogue site
+        run: |
+          bun run --cwd site typecheck
+          bun test --cwd site
+          bun run --cwd site test:browser
+      - name: Build catalogue from exported registry JSON
+        run: |
+          go run ./cmd/registry export --store registry/plugins --output dist
+          bun site/cli.ts --input dist --output dist
 
   adapter:
     runs-on: ubuntu-latest
@@ -85,6 +96,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with: { node-version: "26.12.1" }
       - name: Install locked dependencies
+        working-directory: .
         run: bun install --frozen-lockfile
       - name: Lint Worker
         run: bun run lint

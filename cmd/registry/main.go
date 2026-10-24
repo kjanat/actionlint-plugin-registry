@@ -173,16 +173,9 @@ func run(ctx context.Context, args []string) error {
 			if err != nil {
 				return err
 			}
-			snapshot, err := registry.ExportWithDownloadCounts(ctx, index, *outputPath, client, statuses, &aliases, evidence...)
-			if err != nil {
-				return err
-			}
-			return registry.WriteCatalogue(index, *outputPath, statuses, &snapshot, &aliases)
+			return registry.ExportWithDownloadCounts(ctx, index, *outputPath, client, statuses, &aliases, evidence...)
 		}
-		if err := registry.Export(index, *outputPath, statuses, &aliases, evidence...); err != nil {
-			return err
-		}
-		return registry.WriteCatalogue(index, *outputPath, statuses, nil, &aliases)
+		return registry.Export(index, *outputPath, statuses, &aliases, evidence...)
 	case "merge":
 		if *candidatePath == "" {
 			return errors.New("merge requires --candidate")

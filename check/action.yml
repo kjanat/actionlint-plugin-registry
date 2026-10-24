@@ -31,7 +31,7 @@ runs:
       shell: bash
       env:
         ACTION_PATH: ${{ github.action_path }}
-      run: bun install --cwd "$ACTION_PATH/.." --frozen-lockfile
+      run: bun install --cwd "$ACTION_PATH/.." --frozen-lockfile --filter @kjanat-actionlint/registry-tools
     - name: Install and exercise candidate bytes
       id: check
       shell: bash
