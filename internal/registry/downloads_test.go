@@ -10,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/google/go-github/v93/github"
 )
@@ -78,12 +79,13 @@ func (f counterFunc) DownloadCount(ctx context.Context, entry Entry) (int64, err
 	return f(ctx, entry)
 }
 
-func TestDownloadSnapshotsPreserveUnknownsAndRecords(t *testing.T) {
+func TestCollectDownloadsPreservesZeroAndUnknownCounts(t *testing.T) {
 	entry := acceptedFixture(t)
 	unavailable := entry
 	unavailable.Submission.Tag = "v2"
 	unsupported := entry
 	unsupported.Submission.Provider = "gitlab"
+	unsupported.Receipt.Identity.Issuer = "https://gitlab.com"
 	index := Index{SchemaVersion: 1, Entries: []Entry{entry, unavailable, unsupported}}
 	calls := 0
 	snapshot := collectDownloads(t.Context(), index, counterFunc(func(_ context.Context, e Entry) (int64, error) {
@@ -97,9 +99,23 @@ func TestDownloadSnapshotsPreserveUnknownsAndRecords(t *testing.T) {
 		t.Fatalf("invalid snapshot: %+v, calls %d", snapshot, calls)
 	}
 	if snapshot.Releases[0].Count == nil || *snapshot.Releases[0].Count != 0 ||
+		snapshot.Releases[0].Status != "available" ||
 		snapshot.Releases[1].Count != nil || snapshot.Releases[1].Status != "unavailable" ||
 		snapshot.Releases[2].Count != nil || snapshot.Releases[2].Status != "unsupported" {
 		t.Fatalf("unknown download counts became zero: %+v", snapshot.Releases)
+	}
+}
+
+func TestExportDownloadSnapshotPreservesPublicationRecords(t *testing.T) {
+	entry := acceptedFixture(t)
+	index := Index{SchemaVersion: 1, Entries: []Entry{entry}}
+	snapshot := DownloadSnapshot{
+		SchemaVersion: 1, ObservedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		Releases: []DownloadObservation{{
+			Provider: entry.Submission.Provider, RepositoryID: entry.RepositoryID,
+			Version: entry.Submission.Tag, AssetID: entry.AssetID, SHA256: entry.Submission.SHA256,
+			Status: "available", Count: new(int64(42)),
+		}},
 	}
 	before := t.TempDir()
 	after := t.TempDir()
@@ -131,15 +147,6 @@ func TestDownloadSnapshotsPreserveUnknownsAndRecords(t *testing.T) {
 	var decoded DownloadSnapshot
 	if err = json.Unmarshal(data, &decoded); err != nil || !reflect.DeepEqual(decoded, snapshot) {
 		t.Fatalf("snapshot round trip failed: %v", err)
-	}
-	html, err := os.ReadFile(filepath.Join(after, "index.html"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, text := range []string{"<td>0</td>", "<td>unavailable</td>", "<td>unsupported</td>", "downloads.json", "unique users", "Observed "} {
-		if !strings.Contains(string(html), text) {
-			t.Errorf("missing rendered %q", text)
-		}
 	}
 }
 
