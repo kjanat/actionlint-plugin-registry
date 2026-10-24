@@ -54,6 +54,17 @@ commands produce reports that distinguish deterministic rejection from retryable
 infrastructure failures. Recovery acts only on a report matching its authenticated
 submission and lease.
 
-To deploy the Worker, run `bunx wrangler deploy` from `worker/`. It uses a custom
-domain and a SQLite Durable Object. Access through workers.dev and preview URLs is
-disabled. None of the checks listed above requires a development server.
+## Worker deployment
+
+From the repository root, after configuring [Cloudflare and GitHub App credentials](docs/github-app.md#configure-the-deployment):
+
+```sh
+mise run deploy:worker
+```
+
+This runs `check:worker` before deploying through the project's Wrangler dependency.
+For a bundle check without deployment, run `bun run --cwd worker check:bundle`.
+The package also exposes `bun run deploy` from `worker/` for direct Wrangler use.
+
+The Worker uses a custom domain and a SQLite Durable Object. Access through
+workers.dev and preview URLs is disabled. None of the checks requires a development server.

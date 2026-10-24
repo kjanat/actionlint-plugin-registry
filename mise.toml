@@ -42,5 +42,11 @@ run = ["bun run typecheck", "bun run test"]
 dir = "worker"
 run = ["bun run lint", "bun run typecheck", "bun test", "bun run check:bundle", "bun run test:runtime"]
 
+[tasks."deploy:worker"]
+description = "Check and deploy the registry Worker to Cloudflare."
+depends     = ["check:worker"]
+dir         = "worker"
+run         = "bun run deploy"
+
 [tasks.modernize]
 run = "go run golang.org/x/tools/go/analysis/passes/modernize/cmd/modernize@latest -fix ./..."

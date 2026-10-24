@@ -139,8 +139,8 @@ publisher OIDC to start a new attempt sequence. The original submission ID and
 accepted bytes stay unchanged. If workflow cleanup cannot run, lease expiry remains
 the fallback. See [admission recovery](github-app.md#verify-the-integration).
 
-Deploy the updated Worker before enabling the workflow's `consume recover` step;
-that step calls the Worker's `/v1/claims/:id/retry` endpoint.
+Run `mise run deploy:worker` from the registry checkout before enabling the workflow's
+`consume recover` step; that step calls the Worker's `/v1/claims/:id/retry` endpoint.
 
 Candidate checks test local artifact behavior and installation. GitHub permissions,
 immutable-release settings and public catalogue delivery are checked during actual
