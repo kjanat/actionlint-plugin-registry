@@ -1,0 +1,16 @@
+{
+  "name": "@kjanat-actionlint/registry-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "bun test scripts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@kjanat/dreamcli": "4.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "typescript": "7.0.2"
+  }
+}

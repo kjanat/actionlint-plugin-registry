@@ -25,8 +25,14 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with: { version-file: "${{ github.workspace }}/.tool-versions", skip-cache: true }
-      - name: Test submission action
-        run: python3 -B -m unittest discover -s scripts -p 'test_*.py'
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with: { bun-version-file: ".tool-versions" }
+      - name: Install registry CLI dependencies
+        run: bun install --frozen-lockfile
+      - name: Check registry CLI types
+        run: bun run typecheck
+      - name: Test publisher and recovery commands
+        run: bun run test
 
   adapter:
     runs-on: ubuntu-latest
@@ -42,6 +48,30 @@ jobs:
       - name: Lint actionlint checker
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with: { version-file: "../../.tool-versions", working-directory: adapters/actionlint, skip-cache: true }
+
+  candidate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { persist-credentials: false }
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with: { go-version-file: adapters/actionlint/go.mod, cache: false }
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with: { bun-version-file: ".tool-versions", no-cache: true }
+      - name: Build supported host and package fixture
+        run: |
+          bun install --frozen-lockfile
+          mkdir -p "$RUNNER_TEMP/candidate-check"
+          go -C adapters/actionlint build -o "$RUNNER_TEMP/candidate-check/actionlint" actionlint.kjanat.dev/v2/cmd/actionlint
+          bun adapters/actionlint/internal/validation/testdata/candidate.ts package --output "$RUNNER_TEMP/candidate-check/plugin.wasm"
+      - name: Exercise the shared candidate action
+        uses: ./check
+        with:
+          actionlint: ${{ runner.temp }}/candidate-check/actionlint
+          artifact: ${{ runner.temp }}/candidate-check/plugin.wasm
+          fixture: adapters/actionlint/internal/validation/testdata/candidate.ts
+          report: ${{ runner.temp }}/candidate-check/receipt.json
 
   worker:
     runs-on: ubuntu-latest
@@ -64,5 +94,5 @@ jobs:
         run: bun test
       - name: Validate Worker deployment bundle
         run: bun run check:bundle
-      - name: Test dispatch and redirect rejection in workerd
+      - name: Test dispatch and recovery in workerd
         run: bun run test:runtime

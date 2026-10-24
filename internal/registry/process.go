@@ -36,12 +36,21 @@ func (b *boundedBuffer) Write(p []byte) (int, error) {
 // snapshot. It excludes registry credentials but does not provide an OS sandbox.
 // Admission never calls this function.
 func CheckCompatibility(ctx context.Context, executable, path string, entry Entry) (evidence compatibility.Evidence, err error) {
+	if err = entry.Submission.Validate(); err != nil {
+		return evidence, err
+	}
+	return CheckArtifact(ctx, executable, path, entry.Submission.SHA256)
+}
+
+// CheckArtifact observes a local candidate without requiring publication. The
+// caller supplies the inspected digest; the checker receives a verified snapshot.
+func CheckArtifact(ctx context.Context, executable, path, expectedDigest string) (evidence compatibility.Evidence, err error) {
 	executable, err = filepath.Abs(executable)
 	if err != nil {
 		return evidence, err
 	}
-	if err = entry.Submission.Validate(); err != nil {
-		return evidence, err
+	if !digestPattern.MatchString(expectedDigest) {
+		return evidence, errors.New("invalid checker input digest")
 	}
 	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
 	defer cancel()
@@ -63,8 +72,8 @@ func CheckCompatibility(ctx context.Context, executable, path string, entry Entr
 	if err != nil {
 		return evidence, err
 	}
-	if digest != entry.Submission.SHA256 {
-		return evidence, errors.New("checker input checksum disagrees with accepted release")
+	if digest != expectedDigest {
+		return evidence, errors.New("checker input checksum differs from inspected artifact")
 	}
 	cmd := exec.CommandContext(ctx, checkerPath, snapshot)
 	cmd.Dir = dir
@@ -83,7 +92,7 @@ func CheckCompatibility(ctx context.Context, executable, path string, entry Entr
 	if err = jsonv2.Unmarshal(stdout.Bytes(), &evidence.Report, jsonv2.RejectUnknownMembers(true)); err != nil {
 		return evidence, fmt.Errorf("checker response: %w", err)
 	}
-	if evidence.Report.ArtifactSHA256 != entry.Submission.SHA256 {
+	if evidence.Report.ArtifactSHA256 != expectedDigest {
 		return evidence, errors.New("checker report refers to a different artifact")
 	}
 	evidence.ObservedAt = time.Now().UTC()

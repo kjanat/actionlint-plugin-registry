@@ -26,8 +26,8 @@ contract. Admission does not require the registry's checker to support that ABI.
 
 Set `transport` to `"wasm-component"`, `interface` to the interface identity, and
 `contract_sha256` to the lowercase SHA-256 checksum of the canonical contract.
-These are declarations. Admission does not establish that the exported types match
-them; a compatible host's checker must verify that separately.
+These are declarations. A compatible host's checker verifies the exported types;
+admission reads the declaration without instantiating the component.
 
 For example, a component can declare:
 
@@ -71,8 +71,11 @@ metadata agreement, application registration, default configuration, repeated sa
 analysis, diagnostic positions, and fixes. Its Ruff sample requires F821, and its
 ShellCheck sample requires SC2086. These samples do not prove correctness for every input.
 
-The registry's `check` command snapshots and verifies the accepted artifact before
-starting an explicitly selected checker. The checker has a 45-second process
+The registry's `check` command snapshots the artifact before starting an explicitly
+selected checker. With `--plugin` and `--version`, it also checks the accepted
+version's digest and saves the report beside that version. Without those flags it
+checks an unpublished candidate and prints its report without requiring a release.
+The checker has a 45-second process
 deadline and bounded stdout/stderr. The bundled adapter gives guest calls a
 10-second deadline and limits guest linear memory. `GOMEMLIMIT` guides garbage
 collection; it does not impose an operating-system memory limit. The checker
@@ -82,3 +85,9 @@ The versioned [JSON report protocol](../schemas/compatibility.schema.json) recor
 `passed`, `failed`, or `unsupported` for a particular artifact, host revision, and
 policy. A checker crash produces no compatibility evidence. Missing evidence means
 untested. No outcome changes admission or an existing release record.
+
+For release preparation, the [shared candidate check](publishing.md) also installs
+the exact local bytes through actionlint and executes a publisher-supplied fixture.
+Its receipt identifies the tested host binary, fixture and checks. A fixture is
+trusted publisher code and should assert the behavior changed by the release.
+The shared publish action requires this successful receipt before uploading assets.

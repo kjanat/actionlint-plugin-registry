@@ -42,6 +42,7 @@ interface SubmissionStatus {
 	status: 'pending' | 'validating' | 'published' | 'rejected' | 'failed';
 	detail?: string;
 	validator_run?: string;
+	retry_at?: string;
 }
 
 function response(value: Record<string, unknown>): SubmissionStatus {
@@ -53,13 +54,17 @@ function response(value: Record<string, unknown>): SubmissionStatus {
 		throw new Error('The database returned an invalid submission status.');
 	}
 	const result: SubmissionStatus = { id: text(value.id), status };
-	if (status !== 'rejected' && status !== 'failed') return result;
+	if (status === 'pending' && typeof value.lease_until === 'number') {
+		result.retry_at = new Date(value.lease_until * 1000).toISOString();
+	}
 	// Stored detail may contain raw validator output. Public responses use only
 	// canned messages and a URL derived from the authenticated validator identity.
-	result.detail = status === 'rejected'
-		? 'The release failed admission checks. See the validator run for details.'
-		: 'The validator retry limit was reached. Resubmit identical metadata with a fresh publisher token to retry.';
-	if (typeof value.lease_owner === 'string') {
+	if (status === 'rejected' || status === 'failed') {
+		result.detail = status === 'rejected'
+			? 'The release failed admission checks. See the validator run for details.'
+			: 'The validator retry limit was reached. Resubmit identical metadata with a fresh publisher token to retry.';
+	}
+	if (status !== 'published' && typeof value.lease_owner === 'string') {
 		const owner = object(JSON.parse(value.lease_owner));
 		if (
 			owner.issuer === 'https://token.actions.githubusercontent.com'
@@ -259,7 +264,8 @@ export class InboxStore {
 				now,
 			);
 			const next = this.db.query(
-				"SELECT id, receipt FROM submissions WHERE status='pending' OR (status='validating' AND lease_until <= ? AND attempts < 3) ORDER BY created,id LIMIT 1",
+				"SELECT id, receipt FROM submissions WHERE (status='pending' AND (lease_until IS NULL OR lease_until <= ?)) OR (status='validating' AND lease_until <= ? AND attempts < 3) ORDER BY created,id LIMIT 1",
+				now,
 				now,
 			)[0];
 			if (next === undefined) return { claim: null };
@@ -323,10 +329,46 @@ export class InboxStore {
 
 	status(id: string): SubmissionStatus {
 		const found = this.db.query(
-			'SELECT id,status,lease_owner FROM submissions WHERE id=?',
+			'SELECT id,status,lease_owner,lease_until FROM submissions WHERE id=?',
 			id,
 		)[0];
 		if (found === undefined) throw new HttpError(404, 'The requested submission does not exist.');
 		return response(row(found));
+	}
+
+	/** Release a failed run for bounded retry without waiting for lease expiry. */
+	retry(id: string, identity: Identity, lease: string, now: number): SubmissionStatus {
+		return this.db.transaction(() => {
+			const found = this.db.query(
+				'SELECT id,status,lease_id,lease_owner,lease_until,attempts FROM submissions WHERE id=?',
+				id,
+			)[0];
+			if (found === undefined) throw new HttpError(404, 'The requested submission does not exist.');
+			const value = row(found);
+			if (value.lease_id !== lease || value.lease_owner !== JSON.stringify(identity)) {
+				throw new HttpError(403, 'The lease owner does not match this validator run.');
+			}
+			// A repeated cleanup request must not postpone a queued retry or undo completion.
+			if (value.status !== 'validating') return response(value);
+			if (typeof value.lease_until !== 'number' || value.lease_until <= now) {
+				throw new HttpError(409, 'The lease has expired.');
+			}
+			if (typeof value.attempts !== 'number' || value.attempts < 1) {
+				throw new Error('The database returned an invalid attempt count.');
+			}
+			if (value.attempts >= 3) {
+				this.db.query("UPDATE submissions SET status='failed' WHERE id=?", id);
+			} else {
+				const retryAt = now + 60 * 2 ** (value.attempts - 1);
+				this.db.query("UPDATE submissions SET status='pending',lease_until=? WHERE id=?", retryAt, id);
+				this.db.query(
+					'INSERT INTO dispatch_outbox (submission_id,next_attempt,expires) VALUES (?,?,?) ON CONFLICT(submission_id) DO UPDATE SET next_attempt=excluded.next_attempt,attempts=0,expires=excluded.expires',
+					id,
+					retryAt,
+					retryAt + 3600,
+				);
+			}
+			return this.status(id);
+		});
 	}
 }

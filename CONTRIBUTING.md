@@ -35,13 +35,24 @@ mise run setup
 mise run check
 ```
 
-The registry workflow uses `admit --receipt` and `merge --candidate` to pass data
+The shared CLI uses Bun, TypeScript and `@kjanat/dreamcli`. `bun run typecheck` and
+`bun run test` cover publication HTTP responses, package bytes, OIDC boundaries,
+workflow authorization and recovery. `mise run setup` installs both CLI and Worker
+dependencies. See [candidate and publication tooling](docs/publishing.md) for a
+local rehearsal without tags or remote mutations.
+
+The registry workflow uses `admit --store registry/plugins --candidate candidate/plugins`
+and `merge --candidate` to pass data
 between trusted jobs. These commands are not public submission APIs. A receipt file
 does not contain a verifiable signature; the workflow must obtain it from the
 Worker over HTTPS after authenticating with OIDC. Never pass a receipt supplied by
 a publisher to the job that writes registry records. The `inspect` command reads
 discovery metadata. The separate `check` command records host compatibility without
-authorizing publication.
+authorizing publication. Admission reads existing registrations and writes only the
+new delta; publication repeats conflict checks against the latest store. Both
+commands produce reports that distinguish deterministic rejection from retryable
+infrastructure failures. Recovery acts only on a report matching its authenticated
+submission and lease.
 
 To deploy the Worker, run `bunx wrangler deploy` from `worker/`. It uses a custom
 domain and a SQLite Durable Object. Access through workers.dev and preview URLs is

@@ -31,7 +31,8 @@ func Resolve(index Index, repository, tag string) (string, error) {
 
 type Catalog struct {
 	SchemaVersion int             `json:"schema_version"`
-	Statuses      string          `json:"statuses"`
+	Source        string          `json:"source,omitempty"`
+	Statuses      string          `json:"statuses,omitempty"`
 	Plugins       []CatalogPlugin `json:"plugins"`
 }
 type CatalogPlugin struct {
@@ -122,7 +123,7 @@ func export(index Index, directory string, statuses []ReleaseStatus, downloads *
 			return err
 		}
 	}
-	if err := WriteJSON(filepath.Join(directory, "index.json"), catalog); err != nil {
+	if err := writeCatalog(directory, catalog); err != nil {
 		return err
 	}
 	if err := WriteJSON(filepath.Join(directory, "statuses.json"), StatusSnapshot{SchemaVersion: 1, Releases: append([]ReleaseStatus{}, statuses...)}); err != nil {
@@ -166,4 +167,9 @@ func export(index Index, directory string, statuses []ReleaseStatus, downloads *
 		return errors.Join(err, f.Close())
 	}
 	return f.Close()
+}
+
+func writeCatalog(directory string, catalog Catalog) error {
+	slices.SortFunc(catalog.Plugins, func(a, b CatalogPlugin) int { return strings.Compare(a.Name, b.Name) })
+	return WriteJSON(filepath.Join(directory, "index.json"), catalog)
 }

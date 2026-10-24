@@ -273,11 +273,11 @@ func (i *Index) Add(e Entry) error {
 			continue
 		}
 		if pluginFor(old) != pluginFor(e) {
-			return errors.New("registered publisher or plugin identity changed")
+			return reject("registered publisher or plugin identity changed")
 		}
 		if old.Submission.Tag == e.Submission.Tag {
 			if old.Submission != e.Submission || old.ReleaseID != e.ReleaseID || old.AssetID != e.AssetID || old.Commit != e.Commit || old.URL != e.URL || old.UpstreamImmutable != e.UpstreamImmutable {
-				return errors.New("accepted version is immutable; refusing replacement")
+				return reject("accepted version is immutable; refusing replacement")
 			}
 			return nil
 		}

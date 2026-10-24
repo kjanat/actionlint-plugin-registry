@@ -27,14 +27,14 @@ func main() {
 
 func run(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: registry <admit|inspect|check|resolve|merge|export|status> [flags]")
+		return errors.New("usage: registry <candidate|admit|inspect|check|resolve|merge|export|status> [flags]")
 	}
 	flags := flag.NewFlagSet(args[0], flag.ContinueOnError)
 	storePath := flags.String("store", "registry/plugins", "Read or write accepted plugin records in this directory.")
 	receiptPath := flags.String("receipt", "", "Read the JSON receipt obtained from an authenticated Worker claim.")
 	reportPath := flags.String("report", "", "Write a JSON report to this file.")
 	artifactPath := flags.String("artifact", "", "Inspect this local WASM file or check it with an adapter.")
-	candidatePath := flags.String("candidate", "", "Merge validated plugin records from this directory.")
+	candidatePath := flags.String("candidate", "", "Write an admission delta here, or merge validated records from this directory.")
 	outputPath := flags.String("output", "dist", "Write the generated catalogue to this directory.")
 	aliasesPath := flags.String("aliases", "registry/aliases.json", "Read registry-maintained alias assignments for catalogue export.")
 	downloadCounts := flags.Bool("download-counts", false, "Refresh GitHub asset download counts when exporting the catalogue.")
@@ -73,6 +73,15 @@ func run(ctx context.Context, args []string) error {
 		return err
 	}
 	switch args[0] {
+	case "candidate":
+		if *artifactPath == "" {
+			return errors.New("candidate requires --artifact; --output must name a new directory")
+		}
+		candidate, err := registry.ExportCandidate(ctx, *artifactPath, *outputPath, index)
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(candidate)
 	case "status":
 		if *pluginID == "" || *version == "" || *sha256 == "" || *state == "" || *reason == "" || *actorPath == "" {
 			return errors.New("status requires --plugin, --version, --sha256, --status, --reason and --actor-file")
@@ -92,8 +101,22 @@ func run(ctx context.Context, args []string) error {
 		}
 		return (registry.StatusStore{Directory: *statusPath}).Add(index, status)
 	case "check":
-		if *checker == "" || *artifactPath == "" || *pluginID == "" || *version == "" {
-			return errors.New("check requires --checker, --artifact, --plugin and --version")
+		if *checker == "" || *artifactPath == "" || (*pluginID == "") != (*version == "") {
+			return errors.New("check requires --checker and --artifact; add both --plugin and --version to record evidence for an accepted release")
+		}
+		if *pluginID == "" {
+			declaration, err := artifact.Inspect(ctx, *artifactPath)
+			if err != nil {
+				return err
+			}
+			evidence, err := registry.CheckArtifact(ctx, *checker, *artifactPath, declaration.SHA256)
+			if err != nil {
+				return err
+			}
+			if *reportPath != "" {
+				return registry.WriteJSON(*reportPath, evidence)
+			}
+			return json.NewEncoder(os.Stdout).Encode(evidence)
 		}
 		entry, err := registry.Find(index, *pluginID, *version)
 		if err != nil {
@@ -161,7 +184,24 @@ func run(ctx context.Context, args []string) error {
 		if err != nil {
 			return err
 		}
-		return store.Merge(candidate)
+		mergeErr := store.Merge(candidate)
+		if *reportPath != "" {
+			report := registry.NewReport("merge")
+			for _, entry := range candidate.Entries {
+				if len(candidate.Entries) == 1 {
+					report.SubmissionID = entry.Receipt.ID
+				}
+				if mergeErr == nil {
+					report.Accepted = append(report.Accepted, entry)
+				} else {
+					report.Rejected = append(report.Rejected, registry.Failure{Repository: entry.Submission.Repository, Tag: entry.Submission.Tag, Error: mergeErr.Error(), Disposition: registry.FailureDisposition(mergeErr)})
+				}
+			}
+			if err = registry.WriteJSON(*reportPath, report); err != nil {
+				return errors.Join(mergeErr, err)
+			}
+		}
+		return mergeErr
 	case "admit":
 		if *receiptPath == "" {
 			return errors.New("admit requires --receipt to reference a receipt obtained from an authenticated Worker claim")
@@ -193,7 +233,11 @@ func run(ctx context.Context, args []string) error {
 			if err = delta.Add(entry); err != nil {
 				return err
 			}
-			admissionErr = store.Merge(delta)
+			destination := store
+			if *candidatePath != "" {
+				destination.Directory = *candidatePath
+			}
+			admissionErr = destination.Merge(delta)
 		}
 		if admissionErr == nil {
 			report.Accepted = append(report.Accepted, entry)

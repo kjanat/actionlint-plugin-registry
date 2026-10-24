@@ -29,9 +29,21 @@ jobs:
         with:
           ref: master
           persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with: { bun-version-file: ".tool-versions", no-cache: true }
+      - name: Install registry tooling
+        run: bun install --frozen-lockfile
       - name: Claim authenticated publisher request
         id: claim
-        run: python3 -B scripts/consume.py claim
+        run: bun scripts/cli.ts consume claim --directory handoff
+      - name: Save run-bound recovery lease
+        if: steps.claim.outputs.claimed == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: submission-lease
+          path: handoff/lease.json
+          if-no-files-found: error
+          retention-days: 1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         if: steps.claim.outputs.claimed == 'true'
         with:
@@ -48,13 +60,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: bash scripts/validate.sh ./registry-cli admit
           --receipt handoff/receipt.json
-          --store candidate/plugins
-          --report reports/admission.json
-      # Deterministic rejection completes the lease; transient failures remain retryable.
-      - name: Complete rejected submission
-        if: failure() && !cancelled() && steps.claim.outputs.claimed == 'true' && steps.admission.outcome == 'failure'
-        run: python3 -B scripts/consume.py reject
-          --lease handoff/lease.json
+          --store registry/plugins
+          --candidate candidate/plugins
           --report reports/admission.json
       - name: Preserve admission report
         if: always() && steps.claim.outputs.claimed == 'true'
@@ -104,9 +111,19 @@ jobs:
           path: accepted
       # Only accepted JSON records cross jobs; no publisher WASM executes here.
       - name: Merge immutable version records
+        id: merge
         run: go run ./cmd/registry merge
           --store registry/plugins
           --candidate accepted/candidate/plugins
+          --report reports/publication.json
+      - name: Save publication result
+        if: always() && steps.merge.outcome != 'skipped'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: publication-report
+          path: reports/publication.json
+          if-no-files-found: warn
+          retention-days: 30
       # The App credential is minted only after trusted code finishes merging data.
       - name: Create registry bot installation token
         id: app-token
@@ -162,8 +179,43 @@ jobs:
         with:
           name: validated-submission
           path: accepted
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with: { bun-version-file: ".tool-versions", no-cache: true }
+      - name: Install registry tooling
+        run: bun install --frozen-lockfile
       # Published means the accepted record reached Pages, not merely a Git commit.
       - name: Complete published submission
-        run: python3 -B scripts/consume.py complete
+        run: bun scripts/cli.ts consume complete
           --lease accepted/handoff/lease.json
           --status published
+
+  recover:
+    needs: [validate, publish, pages, complete]
+    if: always() && needs.validate.outputs.claimed == 'true' && needs.complete.result != 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: { ref: refs/heads/master, persist-credentials: false }
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: submission-lease
+          path: handoff
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          pattern: "*-report"
+          path: reports
+          merge-multiple: true
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with: { bun-version-file: ".tool-versions", no-cache: true }
+      - name: Install registry tooling
+        run: bun install --frozen-lockfile
+      # Bound to the claiming workflow run; stale runs cannot release a newer lease.
+      - name: Reject conflicts or schedule a bounded retry
+        run: bun scripts/cli.ts consume recover
+          --lease handoff/lease.json
+          --report reports/publication.json
+          --report reports/admission.json

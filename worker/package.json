@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit",
     "prepare": "wrangler types",
     "check:bundle": "wrangler deploy --dry-run --outdir .dry-run",
-    "test:runtime": "node scripts/runtime-dispatch.ts"
+    "test:runtime": "node scripts/runtime-dispatch.ts && node scripts/runtime-recovery.ts"
   },
   "dependencies": {
     "jose": "6.2.13"

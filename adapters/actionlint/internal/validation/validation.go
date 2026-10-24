@@ -15,12 +15,12 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"actionlint.kjanat.dev/analyzer"
-	"actionlint.kjanat.dev/plugin"
-	"actionlint.kjanat.dev/rule"
+	"actionlint.kjanat.dev/v2/analyzer"
+	"actionlint.kjanat.dev/v2/plugin"
+	"actionlint.kjanat.dev/v2/rule"
 )
 
-const HostCommit = "abe9f897d9d8d019c572142626b8f055352f2ac7"
+const HostCommit = "16768627b0e9cefbb28781c5793ba9f5d9689c5c"
 
 const callTimeout = 10 * time.Second
 
@@ -67,7 +67,7 @@ func Validate(ctx context.Context, path string) (Result, error) {
 	case plugin.CoreArtifact:
 		result, err = validateCore(ctx, path)
 	case plugin.ComponentArtifact:
-		result, err = validateComponent(ctx, path, manifest.Descriptor)
+		result, err = validateComponent(ctx, path, manifest)
 	default:
 		return Result{}, errors.New("unsupported artifact kind")
 	}

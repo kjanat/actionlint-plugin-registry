@@ -3,24 +3,35 @@ package validation
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 
-	"actionlint.kjanat.dev/analyzer"
-	"actionlint.kjanat.dev/plugin"
-	"actionlint.kjanat.dev/rule"
+	"actionlint.kjanat.dev/v2/analyzer"
+	"actionlint.kjanat.dev/v2/plugin"
+	"actionlint.kjanat.dev/v2/rule"
 )
 
-// These constants identify the contract generated at HostCommit.
-// The selected host validates the component's WIT types before starting the guest.
+// The selected host validates exported WIT types before starting the guest.
 var ErrUnsupportedContract = errors.New("contract is not supported by this checker")
 
 const componentInterface = "kjanat:actionlint/analyzer@0.1.0"
-const componentContractDigest = "a0096f562ab3da46b30d0f025ad1c6ed0d46e5b7ea1a53660b3214e3270fcbee"
+const scriptInterface = "kjanat:actionlint/script-engine@0.1.0"
+const runnerInterface = "kjanat:actionlint/runner-provider@0.1.0"
+
+func supportedComponent(iface string) bool {
+	switch iface {
+	case componentInterface, scriptInterface, runnerInterface:
+		return true
+	default:
+		return false
+	}
+}
 
 // componentDeclaration reuses the host's public descriptor and adapts its JSON field names.
 // The rule fields retain the types defined by the host.
@@ -80,8 +91,13 @@ func inspectMetadata(ctx context.Context, info plugin.ArtifactInfo) (embeddedMet
 		if err := jsonv2.Unmarshal(info.Metadata, &contract); err != nil {
 			return metadata, fmt.Errorf("component contract declaration: %w", err)
 		}
-		if contract.Transport != "wasm-component" || contract.Interface != componentInterface || contract.Digest != componentContractDigest {
+		if contract.Transport != "wasm-component" || !supportedComponent(contract.Interface) {
 			return metadata, ErrUnsupportedContract
+		}
+		// Source hashes change with WIT comments. The host checks actual types;
+		// the declaration's digest identifies the publisher's source contract.
+		if _, err := hex.DecodeString(contract.Digest); err != nil || len(contract.Digest) != 64 || strings.ToLower(contract.Digest) != contract.Digest {
+			return metadata, errors.New("component contract digest must be a lowercase SHA-256")
 		}
 	default:
 		return metadata, ErrUnsupportedContract
@@ -126,8 +142,8 @@ func inspectMetadata(ctx context.Context, info plugin.ArtifactInfo) (embeddedMet
 			}
 		}
 	case plugin.ComponentArtifact:
-		if metadata.Transport != "wasm-component" || metadata.Interface != componentInterface || metadata.ContractSHA256 != componentContractDigest {
-			return metadata, fmt.Errorf("%w: analyzer interface or contract digest differs", ErrUnsupportedContract)
+		if metadata.Interface != componentInterface {
+			break
 		}
 		if metadata.Descriptor == nil || metadata.Descriptor.Name != metadata.ID {
 			return metadata, errors.New("embedded component metadata requires a descriptor matching its id")
@@ -150,7 +166,7 @@ func (metadata embeddedMetadata) contract() string {
 	if metadata.Transport == "wasm-core-json" {
 		return "wasm-core-json/1"
 	}
-	return componentInterface + "#sha256=" + componentContractDigest
+	return metadata.Interface + "#sha256=" + metadata.ContractSHA256
 }
 
 func (declared *componentDeclaration) matches(actual analyzer.Descriptor) error {

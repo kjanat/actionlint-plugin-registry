@@ -1,7 +1,7 @@
 package validation
 
 import (
-	"actionlint.kjanat.dev/plugin"
+	"actionlint.kjanat.dev/v2/plugin"
 	"bytes"
 	"errors"
 	"os"
@@ -9,11 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	"actionlint.kjanat.dev/analyzer"
-	"actionlint.kjanat.dev/rule"
+	"actionlint.kjanat.dev/v2/analyzer"
+	"actionlint.kjanat.dev/v2/rule"
 )
 
-const componentMetadata = `{"metadata_version":1,"transport":"wasm-component","id":"no-sudo","name":"No sudo","description":"Registry component fixture","license":"MIT","repository":"https://github.com/example/plugin","plugin_version":"1.0.0","interface":"kjanat:actionlint/analyzer@0.1.0","contract_sha256":"a0096f562ab3da46b30d0f025ad1c6ed0d46e5b7ea1a53660b3214e3270fcbee","descriptor":{"name":"no-sudo","description":"Check runner privilege assumptions","category":"portability","subcategory":"scripts","maturity":"stable","provider":"example","explanation":"Self-hosted runners may not provide sudo.","help":"Run without privilege elevation or explicitly prepare the runner.","fix_availability":"none","options_schema":{},"requires":["scripts","invocations"]}}`
+const componentMetadata = `{"metadata_version":1,"transport":"wasm-component","id":"no-sudo","name":"No sudo","description":"Registry component fixture","license":"MIT","repository":"https://github.com/example/plugin","plugin_version":"1.0.0","interface":"kjanat:actionlint/analyzer@0.1.0","contract_sha256":"7ce5cd5b7c62542d8b3b9860cdc5b1fa050ee50a87d068765b5050261861dfa7","descriptor":{"name":"no-sudo","description":"Check runner privilege assumptions","category":"portability","subcategory":"scripts","maturity":"stable","provider":"example","explanation":"Self-hosted runners may not provide sudo.","help":"Run without privilege elevation or explicitly prepare the runner.","fix_availability":"none","options_schema":{},"requires":["scripts","invocations"]}}`
 
 func metadataSection(metadata string) []byte {
 	name := "actionlint.plugin"

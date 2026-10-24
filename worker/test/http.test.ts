@@ -46,6 +46,7 @@ test('HTTP preflight denies unauthenticated writes before durable-object access'
 			'/v1/submissions',
 			'/v1/claims',
 			'/v1/claims/00000000-0000-4000-8000-000000000001/complete',
+			'/v1/claims/00000000-0000-4000-8000-000000000001/retry',
 		]
 	) {
 		const response = preflight(

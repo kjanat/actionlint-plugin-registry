@@ -64,7 +64,7 @@ export function preflight(
 		if (
 			request.method !== 'POST'
 			|| (!['/v1/submissions', '/v1/claims'].includes(url.pathname)
-				&& !/^\/v1\/claims\/[0-9a-f-]{36}\/complete$/u.test(url.pathname))
+				&& !/^\/v1\/claims\/[0-9a-f-]{36}\/(complete|retry)$/u.test(url.pathname))
 		) {
 			return json({ error: 'The requested endpoint does not exist.' }, 404);
 		}

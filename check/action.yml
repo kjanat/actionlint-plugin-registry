@@ -1,0 +1,51 @@
+name: Check actionlint plugin candidate
+description: Install packaged candidate bytes without a release, exercise plugin fixtures, and check cached execution.
+inputs:
+  artifact:
+    description: Packaged Wasm file to inspect and install.
+    default: artifacts/plugin.wasm
+  actionlint:
+    description: Executable for the supported actionlint revision.
+    required: true
+  fixture:
+    description: TypeScript module exporting prepare and verify for the plugin's behavior.
+    required: true
+  report:
+    description: Destination for the candidate receipt used during publication.
+    default: candidate.json
+outputs:
+  sha256:
+    description: SHA-256 of the candidate installed and exercised successfully.
+    value: ${{ steps.check.outputs.sha256 }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+      with:
+        go-version-file: ${{ github.action_path }}/../go.mod
+        cache: false
+    - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+      with:
+        bun-version: "1.4.3"
+    - name: Install registry tooling
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: bun install --cwd "$ACTION_PATH/.." --frozen-lockfile
+    - name: Install and exercise candidate bytes
+      id: check
+      shell: bash
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+        ARTIFACT: ${{ inputs.artifact }}
+        ACTIONLINT: ${{ inputs.actionlint }}
+        FIXTURE: ${{ inputs.fixture }}
+        REPORT: ${{ inputs.report }}
+      run: |
+        tools="$(mktemp -d)"
+        trap 'rm -rf -- "$tools"' EXIT
+        go -C "$ACTION_PATH/.." build -o "$tools/registry" ./cmd/registry
+        bash "$ACTION_PATH/../scripts/validate.sh" bun "$ACTION_PATH/../scripts/cli.ts" check \
+          --registry "$tools/registry" --actionlint "$ACTIONLINT" \
+          --artifact "$ARTIFACT" --fixture "$FIXTURE" \
+          --store "$ACTION_PATH/../registry/plugins" --report "$REPORT"
