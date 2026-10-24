@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<meta name="color-scheme" content="light dark">
+	<meta name="description" content="Browse actionlint plugins, install pinned releases, and inspect their publication records.">
+	<title>Plugins for actionlint</title>
+	<style>
+		:root { color-scheme: light dark; --paper: #f5f7fb; --surface: #fff; --ink: #17243b; --muted: #52617a; --line: #d8e0ed; --link: #254fb8; --wash: #edf2fc; --good: #216344; --warn: #805400; --bad: #a32f3b; }
+		* { box-sizing: border-box; }
+		body { margin: 0; background: var(--paper); color: var(--ink); font: 1rem/1.6 ui-sans-serif, system-ui, sans-serif; }
+		a { color: var(--link); text-underline-offset: .2em; }
+		a:hover { text-decoration-thickness: 2px; }
+		:focus-visible { outline: 3px solid var(--link); outline-offset: 4px; }
+		.wrap { max-width: 68rem; margin: auto; padding: 0 2rem; }
+		.masthead { border-bottom: 1px solid var(--line); background: var(--surface); }
+		.masthead .wrap { display: flex; align-items: center; justify-content: space-between; gap: 1rem 2rem; min-height: 5rem; flex-wrap: wrap; padding-top: 1rem; padding-bottom: 1rem; }
+		.brand { color: var(--ink); font-size: 1.15rem; font-weight: 750; text-decoration: none; }
+		.brand span { color: var(--muted); font-weight: 400; margin-left: .6rem; }
+		nav { display: flex; gap: 1.5rem; flex-wrap: wrap; font-size: .9rem; }
+		.intro { padding: 3.5rem 0 2rem; max-width: 44rem; }
+		h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.15; letter-spacing: -.035em; margin: 0 0 1rem; }
+		.intro p { color: var(--muted); margin: 0; font-size: 1.1rem; }
+		.section-heading { display: flex; align-items: baseline; gap: 1rem; margin-bottom: 1rem; }
+		h2 { font-size: 1.1rem; margin: 0; }
+		.section-heading p { color: var(--muted); font-size: .9rem; margin: 0; }
+		.releases { list-style: none; padding: 0; margin: 0; }
+		.release { padding: 1.75rem 2rem; margin-bottom: 1rem; border: 1px solid var(--line); border-radius: .65rem; background: var(--surface); min-width: 0; }
+		.release-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+		h3 { font-size: 1.4rem; line-height: 1.3; margin: 0 0 .35rem; overflow-wrap: anywhere; }
+		.repository { color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+		.state { border: 1px solid currentColor; border-radius: .3rem; padding: .1rem .6rem; font-size: .8rem; color: var(--good); white-space: nowrap; }
+		.deprecated { color: var(--warn); }
+		.withdrawn, .revoked { color: var(--bad); }
+		.metadata { display: flex; flex-wrap: wrap; gap: .75rem 3rem; margin: 1.25rem 0; }
+		.metadata div { min-width: 0; }
+		dt { color: var(--muted); font-size: .8rem; }
+		dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
+		code { font: .85rem/1.65 ui-monospace, "Cascadia Code", Consolas, monospace; overflow-wrap: anywhere; }
+		.install { background: var(--wash); border-radius: .3rem; padding: .75rem 1rem; margin: 0 0 1rem; }
+		.install code { display: block; }
+		.reason { padding-left: 1rem; border-left: 3px solid var(--line); overflow-wrap: anywhere; }
+		.actions { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; align-items: baseline; font-size: .9rem; }
+		details { margin-top: 1rem; border-top: 1px solid var(--line); padding-top: .8rem; }
+		summary { cursor: pointer; color: var(--link); font-size: .9rem; width: fit-content; }
+		.integrity { margin: 1rem 0 0; }
+		.integrity div + div { margin-top: .75rem; }
+		.integrity code { display: block; }
+		.notes { margin: 2rem 0 3rem; max-width: 48rem; color: var(--muted); font-size: .9rem; }
+		.notes p { margin: .75rem 0; }
+		.notes h2 { color: var(--ink); }
+		footer { border-top: 1px solid var(--line); padding: 1.5rem 0; font-size: .9rem; color: var(--muted); }
+		.skip { position: absolute; top: -10rem; padding: .5rem; background: var(--surface); }
+		.skip:focus { top: .5rem; left: .5rem; }
+		@media (max-width: 40rem) {
+			.wrap { padding-left: 1rem; padding-right: 1rem; }
+			.intro { padding: 2.5rem 0 1.75rem; }
+			.release { padding: 1.25rem; }
+			.release-heading { flex-wrap: wrap; }
+			.metadata { gap: .75rem 1.5rem; }
+			.section-heading { flex-wrap: wrap; gap: .25rem 1rem; }
+		}
+		@media (prefers-color-scheme: dark) {
+			:root { --paper: #182337; --surface: #202e45; --ink: #eaf0fa; --muted: #b5c2d8; --line: #40506a; --link: #a5c3ff; --wash: #2a3b58; --good: #91d5b0; --warn: #f0c57d; --bad: #ffabb4; }
+		}
+	</style>
+</head>
+<body>
+	<a class="skip" href="#releases">Skip to releases</a>
+	<header class="masthead">
+		<div class="wrap">
+			<a class="brand" href="./">actionlint<span>plugin registry</span></a>
+			<nav aria-label="Registry">
+				<a href="index.json">JSON index</a>
+				<a href="https://github.com/kjanat/actionlint-registry/blob/master/docs/publishing.md">Publish a plugin</a>
+			</nav>
+		</div>
+	</header>
+	<main class="wrap">
+		<div class="intro">
+			<h1>Plugins for actionlint</h1>
+			<p>Browse published releases and install the version your project needs.</p>
+		</div>
+		<section id="releases" aria-labelledby="releases-heading">
+			<div class="section-heading">
+				<h2 id="releases-heading">Published releases</h2>
+				<p>{{len .Releases}} accepted {{if eq (len .Releases) 1}}release{{else}}releases{{end}}</p>
+			</div>
+			<ol class="releases">
+				{{range .Releases}}
+				<li class="release">
+					<article>
+						<div class="release-heading">
+							<div>
+								<h3>{{.Name}}</h3>
+								<a class="repository" href="{{.RepositoryURL}}">{{.Submission.Provider}}.com/{{.Submission.Repository}}</a>
+							</div>
+							<span class="state {{.State}}">{{.State}}</span>
+						</div>
+						<dl class="metadata">
+							<div><dt>Version</dt><dd>{{.Submission.Tag}}</dd></div>
+							<div><dt>Format</dt><dd>{{.Submission.Kind}}</dd></div>
+							<div><dt>Downloads</dt><dd>{{.Downloads}}</dd></div>
+						</dl>
+						{{if or (eq .State "active") (eq .State "deprecated")}}<p class="install"><code>actionlint plugin install {{.Reference}}</code></p>{{end}}
+						{{with .Reason}}<p class="reason">{{.}}</p>{{end}}
+						{{with .Replacement}}<p class="reason">Replacement: {{.}}</p>{{end}}
+						<div class="actions">
+							<a href="{{.PinnedURL}}">Download {{.Submission.Asset}}</a>
+							<a href="{{.Record}}">Publication record</a>
+						</div>
+						<details>
+							<summary>URL and checksum</summary>
+							<dl class="integrity">
+								<div><dt>Pinned URL</dt><dd><code>{{.PinnedURL}}</code></dd></div>
+								<div><dt>SHA-256</dt><dd><code>{{.Submission.SHA256}}</code></dd></div>
+							</dl>
+						</details>
+					</article>
+				</li>
+				{{else}}
+				<li class="release"><p>No releases published yet.</p><a href="https://github.com/kjanat/actionlint-registry/blob/master/docs/publishing.md">Publish your first plugin</a></li>
+				{{end}}
+			</ol>
+		</section>
+		<aside class="notes" aria-labelledby="about-heading">
+			<h2 id="about-heading">About this catalogue</h2>
+			<p>Publisher identities and artifact checksums are verified during admission. Acceptance does not guarantee that a plugin is safe or correct. <a href="statuses.json">Release status data</a> lists deprecations, withdrawals and revocations.</p>
+			<p>Downloads are GitHub's cumulative counters for the accepted assets. They include CI, validation and repeat downloads; they do not measure unique users or installations. Cached checks do not download again. Unavailable or unsupported counts are not zero.</p>
+			{{with .Downloads}}<p>Observed {{.ObservedAt.Format "2006-01-02 15:04:05 UTC"}}. Counts refresh every six hours. <a href="downloads.json">Download counts JSON</a></p>{{end}}
+		</aside>
+	</main>
+	<footer><div class="wrap"><a href="https://github.com/kjanat/actionlint">actionlint</a> / <a href="https://github.com/kjanat/actionlint-registry">Registry source</a></div></footer>
+</body>
+</html>

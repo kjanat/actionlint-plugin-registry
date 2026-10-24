@@ -136,7 +136,7 @@ func TestDownloadSnapshotsPreserveUnknownsAndRecords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, text := range []string{"<td>0</td>", "<td>unavailable</td>", "<td>unsupported</td>", "downloads.json", "unique users", "Observed "} {
+	for _, text := range []string{"<dd>0</dd>", "<dd>unavailable</dd>", "<dd>unsupported</dd>", "downloads.json", "unique users", "Observed "} {
 		if !strings.Contains(string(html), text) {
 			t.Errorf("missing rendered %q", text)
 		}
