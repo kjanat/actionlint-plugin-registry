@@ -1,5 +1,5 @@
 [tools]
-node                                      = "26.10.0"
+node                                      = "26.12.1"
 "github:oven-sh/bun"                      = { prefix = "1.4", version_prefix = "bun-v" }
 "github:kjanat/dprint"                    = "latest"
 "github:kjanat/runner"                    = "latest"
