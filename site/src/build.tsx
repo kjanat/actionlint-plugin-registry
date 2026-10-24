@@ -3,10 +3,10 @@ import { copyFile, mkdir, readdir, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { render } from 'preact-render-to-string';
-import { loadCatalogue } from '@/src/catalogue.ts';
-import { Home, PluginPage } from '@/src/components.tsx';
-import { pageSize, staticPath } from '@/src/directory.ts';
-import type { Sort } from '@/src/directory.ts';
+import { loadCatalogue } from '#catalogue.ts';
+import { Home, PluginPage } from '#components.tsx';
+import { pageSize, staticPath } from '#directory.ts';
+import type { Sort } from '#directory.ts';
 
 export async function buildSite(input: string, output: string): Promise<number> {
 	const data = await loadCatalogue(resolve(input));

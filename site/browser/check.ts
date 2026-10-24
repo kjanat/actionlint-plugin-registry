@@ -3,9 +3,9 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { chromium } from 'playwright';
 import type { BrowserContext } from 'playwright';
-import { buildSite } from '@/src/build.tsx';
-import { catalogueSchema, downloadsSchema, entrySchema, statusSchema } from '@/src/schema.ts';
-import { createExport, fixture } from '@/test/fixtures.ts';
+import { buildSite } from '#build.tsx';
+import { catalogueSchema, downloadsSchema, entrySchema, statusSchema } from '#schema.ts';
+import { createExport, fixture } from '#test/fixtures.ts';
 
 test('static fallback, browser directory and locale behavior against 100 public plugins', async () => {
 	const plugins = Array.from(

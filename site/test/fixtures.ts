@@ -2,7 +2,7 @@ import { afterEach } from 'bun:test';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import type { ReleaseState } from '@/src/schema.ts';
+import type { ReleaseState } from '#schema.ts';
 
 export interface VersionFixture {
 	version: string;

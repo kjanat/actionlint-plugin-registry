@@ -9,7 +9,6 @@
     "allowImportingTsExtensions": true,
     "jsx": "react-jsx",
     "jsxImportSource": "preact",
-    "paths": { "@/*": ["./*"] },
     "noEmit": true,
     "skipLibCheck": true,
     "types": ["bun"]

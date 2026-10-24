@@ -1,3 +1,15 @@
+/** @jsxImportSource preact */
+
+export function Time({ value, compact = false }: { value: string; compact?: boolean }) {
+	const browser = typeof window !== 'undefined';
+	return (
+		<time dateTime={value} data-date-only={compact ? 'true' : undefined}>
+			{localTime(value, browser ? undefined : 'en-GB', browser ? undefined : 'UTC', compact)}
+			{compact && !browser ? ' UTC' : ''}
+		</time>
+	);
+}
+
 export function localTime(value: string, locale?: string, timeZone?: string, dateOnly = false): string {
 	return new Intl.DateTimeFormat(locale, {
 		year: 'numeric',

@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { buildSite } from '@/src/build.tsx';
-import { createExport, fixture } from '@/test/fixtures.ts';
+import { buildSite } from '#build.tsx';
+import { createExport, fixture } from '#test/fixtures.ts';
 
 test('100-plugin build emits 20-row static pages for every sort and preserves registry JSON', async () => {
 	const directory = await createExport(

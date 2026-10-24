@@ -10,7 +10,7 @@ or registry write access.
 From a registry checkout with Bun and its Go toolchain installed:
 
 ```sh
-bun install --frozen-lockfile
+bun install --frozen-lockfile --filter @kjanat-actionlint/registry-tools
 go build -o registry ./cmd/registry
 bun scripts/cli.ts check \
   --registry ./registry --actionlint /path/to/actionlint \

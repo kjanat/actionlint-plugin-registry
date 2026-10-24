@@ -159,11 +159,13 @@ registry entry.
 
 ## Local checks and deployment
 
+From the repository root, install the shared workspace lock once:
+
 ```sh
 bun install --frozen-lockfile
-bun run typecheck
-bun test
-bun run check:bundle
+bun run --cwd worker typecheck
+bun test --cwd worker
+bun run --cwd worker check:bundle
 ```
 
 The tests verify JWT signatures and authentication failures. They also run the

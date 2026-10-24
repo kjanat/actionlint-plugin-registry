@@ -150,7 +150,7 @@ register:
   rules:
     - if: $CI_COMMIT_TAG
   script:
-    - bun install --cwd registry-client --frozen-lockfile
+    - bun install --cwd registry-client --frozen-lockfile --filter @kjanat-actionlint/registry-tools
     - bun registry-client/scripts/cli.ts submit
   variables:
     PLUGIN_PROVIDER: gitlab

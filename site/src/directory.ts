@@ -1,4 +1,4 @@
-import type { PluginSummary } from '@/src/schema.ts';
+import type { PluginSummary } from '#schema.ts';
 
 export const pageSize = 20;
 export type Sort = 'name' | 'downloads' | 'updated';

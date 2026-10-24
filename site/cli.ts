@@ -1,5 +1,5 @@
 import { cli, command, flag } from '@kjanat/dreamcli';
-import { buildSite } from '@/src/build.tsx';
+import { buildSite } from '#build.tsx';
 
 export const build = command('build')
 	.description('Build the static catalogue from exported registry JSON')

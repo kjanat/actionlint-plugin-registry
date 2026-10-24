@@ -1,10 +1,10 @@
 /** @jsxImportSource preact */
 import { expect, test } from 'bun:test';
 import { render } from 'preact-render-to-string';
-import { loadCatalogue } from '@/src/catalogue.ts';
-import { Home, PluginPage } from '@/src/components.tsx';
-import type { ReleaseState } from '@/src/schema.ts';
-import { createExport, fixture } from '@/test/fixtures.ts';
+import { loadCatalogue } from '#catalogue.ts';
+import { Home, PluginPage } from '#components.tsx';
+import type { ReleaseState } from '#schema.ts';
+import { createExport, fixture } from '#test/fixtures.ts';
 
 test('home lists plugins; details retain pinned artifacts and exact commands', async () => {
 	const directory = await createExport([{ ...fixture('Example'), aliases: ['curated'] }]);

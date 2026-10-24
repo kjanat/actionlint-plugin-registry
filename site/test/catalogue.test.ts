@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { loadCatalogue } from '@/src/catalogue.ts';
-import { downloadsSchema } from '@/src/schema.ts';
-import { createExport, fixture } from '@/test/fixtures.ts';
+import { loadCatalogue } from '#catalogue.ts';
+import { downloadsSchema } from '#schema.ts';
+import { createExport, fixture } from '#test/fixtures.ts';
 
 describe('public registry JSON projection', () => {
 	test('groups versions and follows newest publication, even when its version sorts earlier', async () => {

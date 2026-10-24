@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { catalogueSchema, downloadsSchema, entrySchema, manifestSchema, statusSchema } from '@/src/schema.ts';
-import type { DownloadSnapshot, Entry, Metric, Plugin, Release, ReleaseStatus, SiteData } from '@/src/schema.ts';
+import { catalogueSchema, downloadsSchema, entrySchema, manifestSchema, statusSchema } from '#schema.ts';
+import type { DownloadSnapshot, Entry, Metric, Plugin, Release, ReleaseStatus, SiteData } from '#schema.ts';
 
 async function readJSON(path: string): Promise<unknown> {
 	return JSON.parse(await readFile(path, 'utf8'));

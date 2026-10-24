@@ -1,24 +1,14 @@
 /** @jsxImportSource preact */
 import { Fragment } from 'preact';
 import type { ComponentChildren } from 'preact';
-import { pageSize, selectPlugins, stateLink } from '@/src/directory.ts';
-import type { DirectoryState } from '@/src/directory.ts';
-import type { Metric, Plugin, PluginSummary, SiteData } from '@/src/schema.ts';
-import { localTime } from '@/src/time.ts';
+import { pageSize, selectPlugins, stateLink } from '#directory.ts';
+import type { DirectoryState } from '#directory.ts';
+import type { Metric, Plugin, PluginSummary, SiteData } from '#schema.ts';
+import { Time } from '#time.tsx';
 
 const brand =
 	'https://cdn.jsdelivr.net/gh/kjanat/actionlint@51c4b21a2f9ef503fa857c9a0a5099cad981fb76/docs/assets/brand/';
 const publishing = 'https://github.com/kjanat/actionlint-registry/blob/master/docs/publishing.md';
-
-export function Time({ value, compact = false }: { value: string; compact?: boolean }) {
-	const browser = typeof window !== 'undefined';
-	return (
-		<time dateTime={value} data-date-only={compact ? 'true' : undefined}>
-			{localTime(value, browser ? undefined : 'en-GB', browser ? undefined : 'UTC', compact)}
-			{compact && !browser ? ' UTC' : ''}
-		</time>
-	);
-}
 
 export function Count({ metric }: { metric: Metric }) {
 	return metric.state === 'available'

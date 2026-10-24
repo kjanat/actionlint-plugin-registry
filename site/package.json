@@ -2,6 +2,10 @@
   "name": "@kjanat-actionlint/registry-site",
   "private": true,
   "type": "module",
+  "imports": {
+    "#test/*": "./test/*",
+    "#*": "./src/*"
+  },
   "scripts": {
     "browser:install": "playwright install --with-deps --only-shell chromium",
     "build": "bun cli.ts",
@@ -10,14 +14,14 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@kjanat/dreamcli": "4.2.0",
-    "preact": "10.27.2",
-    "preact-render-to-string": "6.6.3",
-    "zod": "4.1.12"
+    "@kjanat/dreamcli": "catalog:",
+    "preact": "catalog:site",
+    "preact-render-to-string": "catalog:site",
+    "zod": "catalog:site"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "playwright": "1.64.1",
-    "typescript": "7.0.2"
+    "@types/bun": "catalog:",
+    "playwright": "catalog:site",
+    "typescript": "catalog:"
   }
 }

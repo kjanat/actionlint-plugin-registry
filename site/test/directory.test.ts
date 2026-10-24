@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
-import { readState, selectPlugins, stateLink } from '@/src/directory.ts';
-import type { DirectoryState } from '@/src/directory.ts';
-import type { PluginSummary } from '@/src/schema.ts';
-import { localTime } from '@/src/time.ts';
+import { readState, selectPlugins, stateLink } from '#directory.ts';
+import type { DirectoryState } from '#directory.ts';
+import type { PluginSummary } from '#schema.ts';
+import { localTime } from '#time.tsx';
 
 export const hundred: PluginSummary[] = Array.from({ length: 100 }, (_, index) => ({
 	name: `Plugin ${String(index + 1).padStart(3, '0')}`,

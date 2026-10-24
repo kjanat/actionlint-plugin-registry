@@ -6,13 +6,15 @@ its browser search index, rendering and client behavior.
 From the repository root:
 
 ```sh
-bun install --cwd site --frozen-lockfile
+bun install --frozen-lockfile
 bun site/cli.ts --input dist --output dist
 bun run --cwd site typecheck
 bun test --cwd site
 bun run --cwd site browser:install
 bun run --cwd site test:browser
 ```
+
+The root Bun workspace owns the shared dependency catalogs and the single lockfile.
 
 Input contains `index.json`, plugin manifests and version records, `statuses.json`,
 and optional `downloads.json`. A separate output directory receives unchanged

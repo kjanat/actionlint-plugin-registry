@@ -1,13 +1,13 @@
 /** @jsxImportSource preact */
 import { render } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
-import { Directory } from '@/src/components.tsx';
-import type { NavigationSource } from '@/src/components.tsx';
-import { readState, selectPlugins, stateLink } from '@/src/directory.ts';
-import type { DirectoryState } from '@/src/directory.ts';
-import { searchIndexSchema } from '@/src/schema.ts';
-import type { PluginSummary } from '@/src/schema.ts';
-import { localize } from '@/src/time.ts';
+import { Directory } from '#components.tsx';
+import type { NavigationSource } from '#components.tsx';
+import { readState, selectPlugins, stateLink } from '#directory.ts';
+import type { DirectoryState } from '#directory.ts';
+import { searchIndexSchema } from '#schema.ts';
+import type { PluginSummary } from '#schema.ts';
+import { localize } from '#time.tsx';
 
 function BrowserDirectory({ plugins, base }: { plugins: PluginSummary[]; base: URL }) {
 	const [state, setState] = useState(readState(new URL(location.href)));
