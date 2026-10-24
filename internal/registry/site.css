@@ -35,12 +35,16 @@ h3 { font-size: 1.35rem; line-height: 1.35; margin: 0; overflow-wrap: anywhere; 
 .section-heading p { margin: 0; color: var(--muted); font-size: .9rem; }
 .catalogue-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(15rem, 20rem); gap: 3.5rem; align-items: start; }
 .plugin-list, .releases, .recent-list { list-style: none; padding: 0; margin: 0; }
-.plugin-list > li + li { margin-top: 1rem; }
-.plugin-card { background: var(--surface); border: 1px solid var(--line); border-radius: .4rem; padding: 1.5rem; min-width: 0; }
+.plugin-list { border-top: 1px solid var(--line); }
+.plugin-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 1.5rem; padding: .75rem 0; border-bottom: 1px solid var(--line); min-width: 0; }
+.plugin-card h3, .plugin-card .repository, .plugin-card .description { grid-column: 1; }
 .plugin-card h3 a { color: var(--ink); }
+.plugin-card h3 { font-size: 1.1rem; }
+.plugin-card .description { margin: .3rem 0 0; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.plugin-card .metadata.compact { grid-column: 2; grid-row: 1 / span 3; display: flex; gap: 1rem; align-items: start; margin: 0; font-size: .85rem; }
+.plugin-card .metadata div + div { margin: 0; }
 .repository { color: var(--muted); overflow-wrap: anywhere; font-size: .9rem; margin: .3rem 0 0; }
 .description { max-width: 70ch; overflow-wrap: anywhere; margin: 1rem 0; }
-.browse-link { font-size: .9rem; }
 .metadata { display: flex; flex-wrap: wrap; gap: 1rem 2.5rem; margin: 1.5rem 0; }
 .metadata div { min-width: 0; max-width: 100%; }
 .metadata.compact { gap: .75rem 2rem; margin-block: 1.15rem; }
@@ -53,6 +57,8 @@ dd { margin: .15rem 0 0; overflow-wrap: anywhere; }
 .ranking li, .recent-list li { padding: .65rem 0; overflow-wrap: anywhere; }
 .ranking li::marker { color: var(--muted); }
 .ranking span, .recent-list time { display: block; color: var(--muted); font-size: .85rem; margin-top: .1rem; }
+.recent-release { display: flex; flex-wrap: wrap; align-items: baseline; gap: .2rem .75rem; }
+.recent-release code { font-size: .8rem; }
 .ranking .empty { list-style: none; margin-left: -1.4rem; }
 .empty { color: var(--muted); font-size: .95rem; }
 .empty p { margin-top: 0; }
@@ -104,7 +110,13 @@ footer p { margin: 0; }
 	.brand span { border: 0; padding: 0; }
 	nav { gap: .5rem 1.25rem; }
 	.intro { padding-block: 2.5rem 2rem; }
-	.plugin-card, .release { padding: 1.15rem; }
+	.release { padding: 1.15rem; }
+	.plugin-card { display: block; padding: .8rem 0; }
+	.plugin-card .repository { font-size: .8rem; }
+	.plugin-card .metadata.compact { display: flex; gap: .5rem 1.5rem; margin: .5rem 0 0; }
+	.plugin-card .metadata div { display: flex; gap: .4rem; align-items: baseline; }
+	.plugin-card .metadata div + div { margin: 0; }
+	.plugin-card dd { margin: 0; }
 	.metadata, .metadata.compact { gap: .75rem 1.5rem; }
 	.discovery { grid-template-columns: minmax(0, 1fr); gap: 2rem; }
 	.notes { margin-block: 2.5rem; }

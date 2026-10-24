@@ -26,7 +26,7 @@ func TestCatalogueGroupsVersionsAndUsesNewestMetadata(t *testing.T) {
 	}
 	plugin := plugins[0]
 	if plugin.Name != "Updated name" || plugin.Description != "Updated description" || plugin.License != "MIT" ||
-		!plugin.UpdatedAt.Equal(newer.PublishedAt) || plugin.Releases[0].Submission.Tag != newer.Submission.Tag {
+		!plugin.UpdatedAt.Equal(newer.PublishedAt) || plugin.UpdatedVersion != newer.Submission.Tag || plugin.Releases[0].Submission.Tag != newer.Submission.Tag {
 		t.Fatalf("plugin metadata did not follow newest publication: %+v", plugin)
 	}
 	if plugin.DownloadCount != nil || plugin.Downloads != "not collected" {
@@ -35,6 +35,14 @@ func TestCatalogueGroupsVersionsAndUsesNewestMetadata(t *testing.T) {
 	view := catalogueHomepage(plugins, nil)
 	if len(view.Popular) != 0 || len(view.Recent) != 1 {
 		t.Fatal("missing statistics prevented recent discovery or produced a ranking")
+	}
+	directory := t.TempDir()
+	if err := Export(Index{Entries: []Entry{old, newer}}, directory, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	page := readCataloguePage(t, directory)
+	if !strings.Contains(page, "<code>"+newer.Submission.Tag+"</code>") || strings.Contains(page, "<code>"+old.Submission.Tag+"</code>") {
+		t.Fatal("recently updated section omitted the published version or showed an old version")
 	}
 }
 

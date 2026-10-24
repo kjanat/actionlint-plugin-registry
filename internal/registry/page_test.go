@@ -21,7 +21,7 @@ func TestCataloguePageInstallationAndEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	page := readCataloguePage(t, directory)
-	if strings.Contains(page, "actionlint plugin install ") || strings.Contains(page, entry.Submission.Tag) {
+	if strings.Contains(page, "actionlint plugin install ") {
 		t.Fatal("homepage lists release details instead of plugins")
 	}
 	pluginPath := "plugins/" + entry.Receipt.PluginKey() + "/index.html"

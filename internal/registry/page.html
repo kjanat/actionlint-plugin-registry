@@ -76,7 +76,6 @@
 								<div><dt>Downloads</dt><dd>{{.Downloads}}</dd></div>
 								<div><dt>Updated</dt><dd><time datetime="{{.UpdatedAt.Format "2006-01-02T15:04:05Z07:00"}}">{{.UpdatedAt.Format "2 Jan 2006"}}</time></dd></div>
 							</dl>
-							<a class="browse-link" href="{{.Path}}">Versions and details<span class="sr-only"> for {{.Name}}</span></a>
 						</article>
 					</li>
 					{{else}}
@@ -96,7 +95,7 @@
 					<h2 id="recent-heading">Recently updated</h2>
 					<p class="section-note">By newest published release.</p>
 					<ul class="recent-list" role="list">
-						{{range .Recent}}<li><a href="{{.Path}}">{{.Name}}</a><time datetime="{{.UpdatedAt.Format "2006-01-02T15:04:05Z07:00"}}">{{.UpdatedAt.Format "2 Jan 2006"}}</time></li>{{else}}<li class="empty">Published plugins will appear here.</li>{{end}}
+						{{range .Recent}}<li><a href="{{.Path}}">{{.Name}}</a><div class="recent-release"><code>{{.UpdatedVersion}}</code><time datetime="{{.UpdatedAt.Format "2006-01-02T15:04:05Z07:00"}}">{{.UpdatedAt.Format "2 Jan 2006"}}</time></div></li>{{else}}<li class="empty">Published plugins will appear here.</li>{{end}}
 					</ul>
 				</section>
 			</aside>

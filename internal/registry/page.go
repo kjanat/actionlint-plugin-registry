@@ -34,18 +34,19 @@ type catalogueRelease struct {
 }
 
 type cataloguePlugin struct {
-	Name          string
-	Description   string
-	License       string
-	Repository    string
-	RepositoryURL string
-	Reference     string
-	Path          string
-	ID            string
-	UpdatedAt     time.Time
-	Downloads     string
-	DownloadCount *int64
-	Releases      []catalogueRelease
+	Name           string
+	Description    string
+	License        string
+	Repository     string
+	RepositoryURL  string
+	Reference      string
+	Path           string
+	ID             string
+	UpdatedAt      time.Time
+	UpdatedVersion string
+	Downloads      string
+	DownloadCount  *int64
+	Releases       []catalogueRelease
 }
 
 type catalogueView struct {
@@ -119,6 +120,7 @@ func cataloguePlugins(index Index, statuses []ReleaseStatus, downloads *Download
 		})
 		newest := plugin.Releases[0]
 		plugin.UpdatedAt = newest.PublishedAt
+		plugin.UpdatedVersion = newest.Submission.Tag
 		var metadata struct{ Name, Description, License string }
 		var raw json.RawMessage
 		if newest.Artifact != nil {
