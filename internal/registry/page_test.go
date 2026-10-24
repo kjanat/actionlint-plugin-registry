@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"encoding/json"
 	"html"
 	"os"
 	"path/filepath"
@@ -9,7 +10,7 @@ import (
 	"time"
 )
 
-func TestCataloguePageInstallationAndEvidence(t *testing.T) {
+func TestCataloguePagesLinkPluginsAndPinnedReleases(t *testing.T) {
 	entry := acceptedFixture(t)
 	index := Index{SchemaVersion: 1, Entries: []Entry{entry}}
 	aliases := Aliases{SchemaVersion: 1, Aliases: map[string]AliasTarget{
@@ -17,7 +18,7 @@ func TestCataloguePageInstallationAndEvidence(t *testing.T) {
 		"future":  {Repository: "github.com/publisher/future", Reserved: true},
 	}}
 	directory := t.TempDir()
-	if err := Export(index, directory, nil, &aliases); err != nil {
+	if err := exportCatalogue(index, directory, nil, &aliases); err != nil {
 		t.Fatal(err)
 	}
 	page := readCataloguePage(t, directory)
@@ -43,7 +44,7 @@ func TestCataloguePageInstallationAndEvidence(t *testing.T) {
 			t.Errorf("missing release information %q", text)
 		}
 	}
-	if strings.Contains(page, "publisher/future") {
+	if strings.Contains(page, "publisher/future") || strings.Contains(readCataloguePage(t, directory), "publisher/future") {
 		t.Fatal("page includes an unpublished alias")
 	}
 	if _, err := os.Stat(filepath.Join(directory, filepath.FromSlash(record))); err != nil {
@@ -56,16 +57,11 @@ func TestCataloguePageRevocationAndEscaping(t *testing.T) {
 	other := entry
 	other.Submission.Tag = "v2.0.0"
 	index := Index{SchemaVersion: 1, Entries: []Entry{entry, other}}
-	status := ReleaseStatus{
-		Name: "github.com/" + entry.Submission.Repository, Version: entry.Submission.Tag,
-		SHA256: entry.Submission.SHA256, Status: StatusRevoked,
-		Reason:      `Unexpected <script>alert("reason")</script> & unsafe behavior`,
-		Replacement: `javascript:alert("replacement")`, ChangedAt: time.Now().UTC(),
-		Actor: StatusActor{Kind: "registry-admin", ID: "1", Name: "maintainer",
-			Workflow: "publisher/registry/.github/workflows/status.yml@refs/heads/master", RunID: "1:1"},
-	}
+	status := statusFixture(entry, StatusRevoked)
+	status.Reason = `Unexpected <script>alert("reason")</script> & unsafe behavior`
+	status.Replacement = `javascript:alert("replacement")`
 	directory := t.TempDir()
-	if err := Export(index, directory, []ReleaseStatus{status}, nil); err != nil {
+	if err := exportCatalogue(index, directory, []ReleaseStatus{status}, nil); err != nil {
 		t.Fatal(err)
 	}
 	page := readPluginPage(t, directory, entry)
@@ -79,30 +75,26 @@ func TestCataloguePageRevocationAndEscaping(t *testing.T) {
 	}
 }
 
-func TestCataloguePageWithoutAliasAndEmptyRegistry(t *testing.T) {
+func TestCatalogueUnaliasedReleaseUsesCanonicalReference(t *testing.T) {
 	entry := acceptedFixture(t)
-	for _, empty := range []bool{false, true} {
-		t.Run(map[bool]string{false: "canonical reference", true: "empty"}[empty], func(t *testing.T) {
-			index := EmptyIndex()
-			if !empty {
-				index.Entries = append(index.Entries, entry)
-			}
-			directory := t.TempDir()
-			if err := Export(index, directory, nil, nil); err != nil {
-				t.Fatal(err)
-			}
-			page := readCataloguePage(t, directory)
-			if empty {
-				if !strings.Contains(page, "No plugins published yet.") || !strings.Contains(page, "Publish your first plugin") {
-					t.Fatal("empty registry has no publication guidance")
-				}
-			} else {
-				page = readPluginPage(t, directory, entry)
-				if !strings.Contains(page, "actionlint plugin install github.com/"+entry.Submission.Repository+"@"+entry.Submission.Tag) {
-					t.Fatal("unaliased plugin lost its canonical installation reference")
-				}
-			}
-		})
+	directory := t.TempDir()
+	if err := exportCatalogue(Index{Entries: []Entry{entry}}, directory, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	page := readPluginPage(t, directory, entry)
+	if !strings.Contains(page, "actionlint plugin install github.com/"+entry.Submission.Repository+"@"+entry.Submission.Tag) {
+		t.Fatal("unaliased plugin lost its canonical installation reference")
+	}
+}
+
+func TestCatalogueEmptyRegistryShowsPublicationGuidance(t *testing.T) {
+	directory := t.TempDir()
+	if err := exportCatalogue(EmptyIndex(), directory, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	page := readCataloguePage(t, directory)
+	if !strings.Contains(page, "No plugins published yet.") || !strings.Contains(page, "Publish your first plugin") {
+		t.Fatal("empty registry has no publication guidance")
 	}
 }
 
@@ -111,15 +103,9 @@ func TestCataloguePageInstallableStatuses(t *testing.T) {
 	index := Index{SchemaVersion: 1, Entries: []Entry{entry}}
 	for _, state := range []ReleaseState{StatusActive, StatusDeprecated, StatusWithdrawn, StatusRevoked} {
 		t.Run(string(state), func(t *testing.T) {
-			status := ReleaseStatus{
-				Name: "github.com/" + entry.Submission.Repository, Version: entry.Submission.Tag,
-				SHA256: entry.Submission.SHA256, Status: state, Reason: "Maintainer status explanation.",
-				ChangedAt: time.Now().UTC(),
-				Actor: StatusActor{Kind: "registry-admin", ID: "1", Name: "maintainer",
-					Workflow: "publisher/registry/.github/workflows/status.yml@refs/heads/master", RunID: "1:1"},
-			}
+			status := statusFixture(entry, state)
 			directory := t.TempDir()
-			if err := Export(index, directory, []ReleaseStatus{status}, nil); err != nil {
+			if err := exportCatalogue(index, directory, []ReleaseStatus{status}, nil); err != nil {
 				t.Fatal(err)
 			}
 			page := readPluginPage(t, directory, entry)
@@ -132,6 +118,44 @@ func TestCataloguePageInstallableStatuses(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCatalogueHomepageShowsNewestPublishedVersion(t *testing.T) {
+	old := acceptedFixture(t)
+	old.PublishedAt = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	newer := changedArtifactFixture(t, old, "v2.0.0", "component", "plugin.wasm")
+	newer.PublishedAt = old.PublishedAt.Add(time.Hour)
+	directory := t.TempDir()
+	if err := exportCatalogue(Index{Entries: []Entry{old, newer}}, directory, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	page := readCataloguePage(t, directory)
+	if !strings.Contains(page, "<code>"+newer.Submission.Tag+"</code>") || strings.Contains(page, "<code>"+old.Submission.Tag+"</code>") {
+		t.Fatal("recently updated section omitted the published version or showed an old version")
+	}
+}
+
+func TestCatalogueMetadataIsEscapedOnBothPages(t *testing.T) {
+	entry := acceptedFixture(t)
+	declaration := *entry.Artifact
+	declaration.Metadata = json.RawMessage(`{"name":"<script>alert(1)</script>","description":"<img src=x onerror=alert(1)>","license":"<b>MIT</b>"}`)
+	entry.Artifact = &declaration
+	directory := t.TempDir()
+	if err := exportCatalogue(Index{Entries: []Entry{entry}}, directory, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, page := range []string{readCataloguePage(t, directory), readPluginPage(t, directory, entry)} {
+		if strings.Contains(page, "<script>") || strings.Contains(page, "<img src=x") || !strings.Contains(page, "&lt;script&gt;") {
+			t.Fatal("publisher metadata became executable markup or disappeared")
+		}
+	}
+}
+
+func exportCatalogue(index Index, directory string, statuses []ReleaseStatus, aliases *Aliases) error {
+	if err := Export(index, directory, statuses, aliases); err != nil {
+		return err
+	}
+	return WriteCatalogue(index, directory, statuses, nil, aliases)
 }
 
 func readCataloguePage(t *testing.T, directory string) string {

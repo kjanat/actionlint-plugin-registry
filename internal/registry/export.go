@@ -132,7 +132,7 @@ func export(index Index, directory string, statuses []ReleaseStatus, downloads *
 			return err
 		}
 	}
-	return writeCataloguePage(index, directory, statuses, downloads, aliases)
+	return nil
 }
 
 func writeCatalog(directory string, catalog Catalog) error {

@@ -110,12 +110,12 @@ func (s DownloadSnapshot) observation(entry Entry) *DownloadObservation {
 
 // ExportWithDownloadCounts keeps network-derived statistics separate from the
 // immutable catalogue records. A bounded refresh cannot delay admission forever.
-func ExportWithDownloadCounts(ctx context.Context, index Index, directory string, client *GitHub, statuses []ReleaseStatus, aliases *Aliases, evidence ...compatibility.Evidence) error {
+func ExportWithDownloadCounts(ctx context.Context, index Index, directory string, client *GitHub, statuses []ReleaseStatus, aliases *Aliases, evidence ...compatibility.Evidence) (DownloadSnapshot, error) {
 	refresh, cancel := context.WithTimeout(ctx, time.Minute)
 	defer cancel()
 	snapshot := collectDownloads(refresh, index, client)
 	if err := ctx.Err(); err != nil {
-		return err
+		return DownloadSnapshot{}, err
 	}
-	return export(index, directory, statuses, &snapshot, aliases, evidence...)
+	return snapshot, export(index, directory, statuses, &snapshot, aliases, evidence...)
 }

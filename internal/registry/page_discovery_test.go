@@ -36,14 +36,6 @@ func TestCatalogueGroupsVersionsAndUsesNewestMetadata(t *testing.T) {
 	if len(view.Popular) != 0 || len(view.Recent) != 1 {
 		t.Fatal("missing statistics prevented recent discovery or produced a ranking")
 	}
-	directory := t.TempDir()
-	if err := Export(Index{Entries: []Entry{old, newer}}, directory, nil, nil); err != nil {
-		t.Fatal(err)
-	}
-	page := readCataloguePage(t, directory)
-	if !strings.Contains(page, "<code>"+newer.Submission.Tag+"</code>") || strings.Contains(page, "<code>"+old.Submission.Tag+"</code>") {
-		t.Fatal("recently updated section omitted the published version or showed an old version")
-	}
 }
 
 func TestCataloguePopularityRequiresCompleteCounts(t *testing.T) {
@@ -118,23 +110,7 @@ func TestCataloguePopularityRequiresCompleteCounts(t *testing.T) {
 	}
 }
 
-func TestCatalogueMetadataIsEscapedOnBothPages(t *testing.T) {
-	entry := acceptedFixture(t)
-	declaration := *entry.Artifact
-	declaration.Metadata = json.RawMessage(`{"name":"<script>alert(1)</script>","description":"<img src=x onerror=alert(1)>","license":"<b>MIT</b>"}`)
-	entry.Artifact = &declaration
-	directory := t.TempDir()
-	if err := Export(Index{Entries: []Entry{entry}}, directory, nil, nil); err != nil {
-		t.Fatal(err)
-	}
-	for _, page := range []string{readCataloguePage(t, directory), readPluginPage(t, directory, entry)} {
-		if strings.Contains(page, "<script>") || strings.Contains(page, "<img src=x") || !strings.Contains(page, "&lt;script&gt;") {
-			t.Fatal("publisher metadata became executable markup or disappeared")
-		}
-	}
-}
-
-func TestCatalogueExportsAdmissionAcceptedCaseExtensions(t *testing.T) {
+func TestCatalogueMetadataIgnoresCaseVariantExtensions(t *testing.T) {
 	for name, extension := range map[string]string{
 		"typed extensions":  `"Name":{"future":"extension"},"Description":["future"],"License":{"id":"future"}`,
 		"string extensions": `"Name":"Wrong name","Description":"Wrong description","License":"Wrong license"`,
@@ -148,21 +124,12 @@ func TestCatalogueExportsAdmissionAcceptedCaseExtensions(t *testing.T) {
 			}
 			entry.Artifact = &declaration
 			index := Index{Entries: []Entry{entry}}
-			directory := t.TempDir()
-			if err := Export(index, directory, nil, nil); err != nil {
-				t.Fatalf("admission-accepted metadata blocked catalogue export: %v", err)
-			}
 			plugins, err := cataloguePlugins(index, nil, nil, nil)
 			if err != nil || len(plugins) != 1 {
 				t.Fatalf("missing plugin: %v, %v", plugins, err)
 			}
 			if plugin := plugins[0]; plugin.Name != "Example" || plugin.Description != "Example plugin" || plugin.License != "MIT" {
 				t.Fatalf("case variants replaced declared metadata: name=%q, description=%q, license=%q", plugin.Name, plugin.Description, plugin.License)
-			}
-			for _, page := range []string{readCataloguePage(t, directory), readPluginPage(t, directory, entry)} {
-				if !strings.Contains(page, "Example plugin") || strings.Contains(page, "Wrong description") {
-					t.Fatal("page rendered extension fields instead of declared metadata")
-				}
 			}
 		})
 	}

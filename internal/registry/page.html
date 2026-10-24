@@ -3,7 +3,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <link rel="stylesheet" href="{{.Root}}assets/site.css">
-<link rel="icon" href="{{.Root}}assets/brand/actionlint-mark.svg" type="image/svg+xml">
+<link rel="icon" href="https://cdn.jsdelivr.net/gh/kjanat/actionlint@51c4b21a2f9ef503fa857c9a0a5099cad981fb76/docs/assets/brand/actionlint-mark.svg" type="image/svg+xml">
 {{end}}
 
 {{define "header"}}
@@ -12,10 +12,10 @@
 	<div class="wrap masthead-inner">
 		<a class="brand" href="{{.Root}}index.html" aria-label="actionlint plugin registry home">
 			<picture class="brand-logo">
-				<source media="(prefers-color-scheme: dark)" srcset="{{.Root}}assets/brand/actionlint-dark.svg">
-				<img src="{{.Root}}assets/brand/actionlint.svg" alt="actionlint" width="260" height="66">
+				<source media="(prefers-color-scheme: dark)" srcset="https://cdn.jsdelivr.net/gh/kjanat/actionlint@51c4b21a2f9ef503fa857c9a0a5099cad981fb76/docs/assets/brand/actionlint-dark.svg">
+				<img src="https://cdn.jsdelivr.net/gh/kjanat/actionlint@51c4b21a2f9ef503fa857c9a0a5099cad981fb76/docs/assets/brand/actionlint.svg" alt="actionlint" width="260" height="66">
 			</picture>
-			<img class="brand-mark" src="{{.Root}}assets/brand/actionlint-mark.svg" alt="actionlint" width="40" height="40">
+			<img class="brand-mark" src="https://cdn.jsdelivr.net/gh/kjanat/actionlint@51c4b21a2f9ef503fa857c9a0a5099cad981fb76/docs/assets/brand/actionlint-mark.svg" alt="actionlint" width="40" height="40">
 			<span>Plugin registry</span>
 		</a>
 		<nav aria-label="Registry">
@@ -39,7 +39,6 @@
 <footer>
 	<div class="wrap footer-inner">
 		<p><a href="https://github.com/kjanat/actionlint">actionlint</a> / <a href="https://github.com/kjanat/actionlint-registry">Registry source</a></p>
-		<p class="attribution"><a href="https://github.com/kjanat/actionlint/tree/51c4b21a2f9ef503fa857c9a0a5099cad981fb76/docs/assets/brand">actionlint identity</a> © 2026 <a href="https://github.com/kjanat">Kaj Kowalski</a>. <a href="{{.Root}}assets/brand/LICENSE.md">CC BY 4.0</a>. Unmodified.</p>
 	</div>
 </footer>
 {{end}}
