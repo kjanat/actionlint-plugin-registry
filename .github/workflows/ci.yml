@@ -33,6 +33,19 @@ jobs:
         run: bun run typecheck
       - name: Test publisher and recovery commands
         run: bun run test
+      - name: Install catalogue site dependencies
+        run: bun install --cwd site --frozen-lockfile
+      - name: Install Chromium for catalogue browser tests
+        run: bun run --cwd site browser:install
+      - name: Check catalogue site
+        run: |
+          bun run --cwd site typecheck
+          bun test --cwd site
+          bun run --cwd site test:browser
+      - name: Build catalogue from exported registry JSON
+        run: |
+          go run ./cmd/registry export --store registry/plugins --output dist
+          bun site/cli.ts --input dist --output dist
 
   adapter:
     runs-on: ubuntu-latest

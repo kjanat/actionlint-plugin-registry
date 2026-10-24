@@ -122,3 +122,24 @@ func TestExistingIdentityGrammarPreserved(t *testing.T) {
 		}
 	}
 }
+
+func TestMetadataAllowsCaseVariantExtensions(t *testing.T) {
+	for name, extension := range map[string]string{
+		"typed extensions":  `"Name":{"future":"extension"},"Description":["future"],"License":{"id":"future"}`,
+		"string extensions": `"Name":"Future name","Description":"Future description","License":"Future license"`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			metadata := []byte(strings.TrimSuffix(string(declarationJSON("component")), "}") + "," + extension + "}")
+			result, err := inspectBytes(t, wasm("component", metadata))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := result.Validate(); err != nil {
+				t.Fatalf("admission rejected case-variant extension fields: %v", err)
+			}
+			if !bytes.Equal(result.Metadata, metadata) {
+				t.Fatal("extension metadata changed")
+			}
+		})
+	}
+}

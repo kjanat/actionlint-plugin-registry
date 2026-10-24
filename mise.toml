@@ -23,11 +23,16 @@ env     = { RUNNER_DIR = "worker" }
 
 [tasks.setup]
 description = "Install project dependencies."
-run         = ["bun install --frozen-lockfile", "bun install --cwd worker --frozen-lockfile"]
+run         = [
+  "bun install --frozen-lockfile",
+  "bun install --cwd worker --frozen-lockfile",
+  "bun install --cwd site --frozen-lockfile",
+  "bun run --cwd site browser:install",
+]
 
 [tasks.check]
 description = "Run project checks."
-depends     = ["test:go", "lint:go", "check:adapter", "check:cli", "check:worker"]
+depends     = ["test:go", "lint:go", "check:adapter", "check:cli", "check:worker", "check:site"]
 
 [tasks."test:go"]
 run = "go test ./..."
@@ -41,6 +46,23 @@ run = ["go test ./...", "golangci-lint run --allow-parallel-runners"]
 
 [tasks."check:cli"]
 run = ["bun run typecheck", "bun run test"]
+
+[tasks."setup:site-browser"]
+description = "Install Chromium for catalogue browser tests."
+dir = "site"
+run = "bun run browser:install"
+
+[tasks."test:site"]
+dir = "site"
+run = ["bun test", "bun run test:browser"]
+
+[tasks."check:site"]
+dir = "site"
+run = ["bun run typecheck", "bun test", "bun run test:browser"]
+
+[tasks."build:site"]
+description = "Export registry JSON and build the catalogue site."
+run = ["go run ./cmd/registry export --store registry/plugins --output dist", "bun site/cli.ts --input dist --output dist"]
 
 [tasks."check:worker"]
 dir = "worker"

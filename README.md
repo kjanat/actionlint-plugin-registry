@@ -41,6 +41,30 @@ go run ./cmd/registry export --store registry/plugins --output dist --download-c
 Omit `--download-counts` for a network-free export. A refresh has a one-minute
 budget; assets not observed within that budget are marked unavailable.
 
+## Catalogue website
+
+The Go registry exports JSON only. The separate TypeScript application in [`site/`](site/)
+reads that catalogue and builds the homepage and per-plugin pages. Installer indexes,
+release records, statuses and download observations keep their existing schemas.
+
+```sh
+mise i
+mise run setup
+mise run check:site
+mise run build:site
+```
+
+`build:site` exports registry JSON into `dist/`, then runs the Bun site builder over
+the same directory. To render an existing export directly:
+
+```sh
+bun site/cli.ts --input dist --output dist
+```
+
+The Pages workflow refreshes the JSON, builds the site and uploads the combined
+output. CI checks site types and behavior and builds against the actual registry
+records. `mise run test:site` runs the frontend tests alone.
+
 ## Publishing
 
 ### Check a candidate
